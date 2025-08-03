@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Font sizes -->
+    <dimen name="text_title_size">@dimen/text_size_medium</dimen>
+    <dimen name="button_tx_size">14sp</dimen>
+    <dimen name="text_size_small">12sp</dimen>
+    <dimen name="text_size_medium">16sp</dimen>
+    <dimen name="text_size_large">20sp</dimen>
+
+
+    <!-- Margins and paddings -->
+    <dimen name="margin_small">8dp</dimen>
+    <dimen name="margin_medium">16dp</dimen>
+    <dimen name="margin_large">24dp</dimen>
+
+    <!-- Icon sizes -->
+    <dimen name="icon_size_small">24dp</dimen>
+    <dimen name="icon_size_medium">48dp</dimen>
+    <dimen name="icon_size_large">72dp</dimen>
+    <dimen name="button_corner">20dp</dimen>
+    <dimen name="divider_margin_left">20dp</dimen>
+    <dimen name="back_width">25dp</dimen>
+</resources>

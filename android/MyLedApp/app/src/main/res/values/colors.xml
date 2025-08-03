@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">@color/blue_1</color>
+    <color name="colorPrimaryDark">@color/blue_1</color>
+    <color name="colorAccent">@color/blue_1</color>
+    <color name="titleTextColor">#FF000000</color>
+    <color name="blue_1">#2196F3</color>
+    <color name="button_blue">@color/blue_1</color> <!-- 默认蓝色背景 -->
+    <color name="button_blue_dark">#1976D2</color> <!-- 按下时的深蓝色背景 -->
+    <color name="button_white">#FFFFFF</color>
+    <color name="black">#FF000000</color>
+    <color name="divider_color">#D3D3D3</color> <!-- 白色文字 -->
+
+</resources>

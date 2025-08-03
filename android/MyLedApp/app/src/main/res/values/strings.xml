@@ -1,0 +1,25 @@
+<resources>
+    <string name="app_name">LED屏控制</string>
+    <string name="find_no_device">未发现LED</string>
+    <string name="connected">连接成功！</string>
+    <string name="disconnected">断开连接！</string>
+    <string name="connecting">连接中...</string>
+    <string name="discover_services">发现服务开始</string>
+    <string name="subscribe_success">订阅成功</string>
+    <string name="require_permission_failed">获取权限失败</string>
+    <string name="device_not_support_bluetooth">设备不支持蓝牙</string>
+    <string name="turn_on_failed">打开失败</string>
+    <string name="draw_a_picture">单图绘制</string>
+    <string name="send">发送</string>
+    <string name="hint_scroll_text">输入滚动文字</string>
+    <string name="hint_static_text">输入静态文字</string>
+    <string name="brightness">亮度</string>
+    <string name="static_text">静态文字显示</string>
+    <string name="scroll_text">滚动文本显示</string>
+    <string name="write_failed">写入失败</string>
+    <string name="write_success">写入成功</string>
+    <string name="static_text_size">文字大小</string>
+    <string name="scroll_speed">滚动速度</string>
+    <string name="gif">GIF</string>
+
+</resources>
