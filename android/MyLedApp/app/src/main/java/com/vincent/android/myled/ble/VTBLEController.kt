@@ -16,6 +16,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import com.vincent.android.myled.utils.DEVICE_NAME
 import com.vincent.android.myled.utils.LED_CHARACTERISTIC_BRIGHTNESS_UUID
 import com.vincent.android.myled.utils.LED_CHARACTERISTIC_DRAW_COLORFUL_UUID
 import com.vincent.android.myled.utils.LED_CHARACTERISTIC_DRAW_NORMAL_UUID
@@ -73,46 +74,41 @@ class VTBLEController(
             callback.onScanFailed()
             return
         }
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            val bluetoothLeScanner = bluetoothAdapter.bluetoothLeScanner
-            if (bluetoothLeScanner == null) {
-                logd("Bluetooth LE scanner not available")
-                callback.onScanFailed()
-                return
-            }
-            
-            mScanCallback = object : ScanCallback() {
-                override fun onScanResult(callbackType: Int, result: ScanResult?) {
-                    super.onScanResult(callbackType, result)
-                    result?.let { scanResult ->
-                        logd("Found device: ${scanResult.device.name ?: "Unknown"} (${scanResult.device.address})")
-                        
-                        // 检查设备名称或地址匹配
-                        if (scanResult.device.name == "MyLED" || 
-                            scanResult.device.address == mDeviceAddress) {
-                            stopScan()
-                            connectDevice(scanResult.device)
-                        }
+
+        val bluetoothLeScanner = bluetoothAdapter.bluetoothLeScanner
+        if (bluetoothLeScanner == null) {
+            logd("Bluetooth LE scanner not available")
+            callback.onScanFailed()
+            return
+        }
+
+        mScanCallback = object : ScanCallback() {
+            override fun onScanResult(callbackType: Int, result: ScanResult?) {
+                super.onScanResult(callbackType, result)
+                result?.let { scanResult ->
+                    logd("Found device: ${scanResult.device.name ?: "Unknown"} (${scanResult.device.address})")
+                    
+                    // 检查设备名称或地址匹配
+                    if (scanResult.device.name == DEVICE_NAME ||
+                        scanResult.device.address == mDeviceAddress) {
+                        stopScan()
+                        connectDevice(scanResult.device)
                     }
                 }
-
-                override fun onScanFailed(errorCode: Int) {
-                    super.onScanFailed(errorCode)
-                    logd("Scan failed with error code: $errorCode")
-                    stopScan()
-                    callback.onScanFailed()
-                }
             }
-            
-            // 开始扫描并设置超时
-            bluetoothLeScanner.startScan(mScanCallback)
-            mHandler.postDelayed(scanTimeoutRunnable, SCAN_TIMEOUT)
-            logd("Started BLE scan with timeout: ${SCAN_TIMEOUT}ms")
-        } else {
-            logd("BLE scanning not supported on this device")
-            callback.onScanFailed()
+
+            override fun onScanFailed(errorCode: Int) {
+                super.onScanFailed(errorCode)
+                logd("Scan failed with error code: $errorCode")
+                stopScan()
+                callback.onScanFailed()
+            }
         }
+
+        // 开始扫描并设置超时
+        bluetoothLeScanner.startScan(mScanCallback)
+        mHandler.postDelayed(scanTimeoutRunnable, SCAN_TIMEOUT)
+        logd("Started BLE scan with timeout: ${SCAN_TIMEOUT}ms")
     }
     
     private fun stopScan() {

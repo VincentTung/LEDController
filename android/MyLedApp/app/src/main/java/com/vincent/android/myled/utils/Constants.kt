@@ -1,6 +1,10 @@
 package com.vincent.android.myled.utils
 
 
+/**
+ * 蓝牙设备名称
+ */
+const val DEVICE_NAME = "MyLED"
 const val LOG_TAG = "MyLED"
 
 /**
