@@ -15,9 +15,9 @@ import com.vincent.android.myled.utils.logd
  */
 open class VTBaseActivity : FragmentActivity() {
     var iosLoadingDialog: IOSLoadingDialog? = null
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
     }
 
     /**
@@ -39,15 +39,37 @@ open class VTBaseActivity : FragmentActivity() {
     }
 
     fun startLoading(text: String) {
-        logd( "startLoading: ")
+        logd("startLoading: ")
         stopLoading()
         iosLoadingDialog = IOSLoadingDialog().setHintMsg(text).setOnTouchOutside(false)
         iosLoadingDialog!!.show(fragmentManager, text)
     }
 
     fun stopLoading() {
-        logd( "stopLoading: ")
-        iosLoadingDialog?.dismiss();
-        iosLoadingDialog = null
+        logd("stopLoading: ")
+        try {
+            // 检查Activity状态，避免在Activity销毁时操作Fragment
+            if (!isFinishing && !isDestroyed && !supportFragmentManager.isStateSaved) {
+                iosLoadingDialog?.dismiss()
+            }
+        } catch (e: Exception) {
+            logd("stopLoading异常: ${e.message}")
+        } finally {
+            iosLoadingDialog = null
+        }
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        // 确保在Activity销毁时清理对话框
+        try {
+            if (!supportFragmentManager.isStateSaved) {
+                iosLoadingDialog?.dismiss()
+            }
+        } catch (e: Exception) {
+            logd("onDestroy中stopLoading异常: ${e.message}")
+        } finally {
+            iosLoadingDialog = null
+        }
     }
 }

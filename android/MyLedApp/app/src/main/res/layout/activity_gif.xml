@@ -22,12 +22,23 @@
         android:layout_weight="1"
         android:padding="8dp" />
 
-    <Button
-        android:id="@+id/btn_update"
-        style="@style/BlueButtonStyle"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="@dimen/margin_medium"
-        android:text="更新到LED" />
+        android:orientation="horizontal">
+
+
+
+        <Button
+            android:id="@+id/btn_send_bytes"
+            style="@style/BlueButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="@dimen/margin_small"
+            android:text="发送文件" />
+
+    </LinearLayout>
 
 </LinearLayout>

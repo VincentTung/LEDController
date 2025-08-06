@@ -21,5 +21,14 @@
     <string name="static_text_size">文字大小</string>
     <string name="scroll_speed">滚动速度</string>
     <string name="gif">GIF</string>
+    <string name="reconnecting_saved_device">正在重连已保存的设备...</string>
+    <string name="no_saved_device">未找到已保存的设备，将扫描新设备...</string>
+    <string name="cleared_saved_device">已清除保存的设备信息</string>
+    <string name="device_already_connected">设备已连接</string>
+    <string name="sending_gif">正在发送GIF文件...</string>
+    <string name="gif_send_success">GIF发送成功</string>
+    <string name="gif_send_failed">GIF发送失败</string>
+    <string name="gif_file_too_large">GIF文件过大</string>
+    <string name="gif_file_read_failed">读取GIF文件失败</string>
 
 </resources>

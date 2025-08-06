@@ -18,7 +18,6 @@ import com.vincent.android.myled.view.PixelViewListener
  */
 class DrawNormalActivity : VTBaseActivity(), PixelViewListener {
 
-    private val MESSAGE_CODE = 1
     private var isRealTime = false
     private lateinit var pixelView: PixelView
 
@@ -81,7 +80,7 @@ class DrawNormalActivity : VTBaseActivity(), PixelViewListener {
     }
 
     private fun setMode(isDrawMode: Boolean) {
-        pixelView.setDragMode(isDrawMode)
+        pixelView.isDragMode = isDrawMode
         if (isDrawMode) {
             ivDrag.setImageResource(R.mipmap.drag_enable)
             ivFill.setImageResource(R.mipmap.fill_disable)

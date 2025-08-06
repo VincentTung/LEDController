@@ -1,14 +1,16 @@
 package com.vincent.android.myled.utils
 
 import android.content.Context
-import android.widget.Toast
-import com.vincent.android.myled.ble.logd
+import android.util.Log
 
 /**
  * 错误处理工具类
- * 统一处理应用中的错误和异常
  */
 object ErrorHandler {
+    
+    private const val TAG = "ErrorHandler"
+    
+
     
     /**
      * 处理BLE相关错误
@@ -79,7 +81,7 @@ object ErrorHandler {
      * 显示错误信息
      */
     private fun showError(context: Context, message: String) {
-        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        ToastUtil.showLong(context, message)
     }
     
     /**

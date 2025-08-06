@@ -1,7 +1,6 @@
 package com.vincent.android.myled.ui
 
 import VTBLECallback
-import android.Manifest
 import android.Manifest.permission.ACCESS_FINE_LOCATION
 import android.Manifest.permission.BLUETOOTH_CONNECT
 import android.Manifest.permission.BLUETOOTH_SCAN
@@ -9,24 +8,22 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
-import android.widget.ProgressBar
 import android.widget.SeekBar
 import android.widget.SeekBar.OnSeekBarChangeListener
 import android.widget.TextView
-import android.widget.Toast
-import androidx.core.app.ActivityCompat
 import com.tbruyelle.rxpermissions2.RxPermissions
 import com.vincent.android.myled.R
 import com.vincent.android.myled.ble.VTBluetoothUtil
 import com.vincent.android.myled.led.LEDController
+import com.vincent.android.myled.utils.DeviceManager
 import com.vincent.android.myled.utils.LED_DEFAULT_BRIGHTNESS
 import com.vincent.android.myled.utils.REQUEST_ENABLE_BLUETOOTH
+import com.vincent.android.myled.utils.ToastUtil
 import com.vincent.android.myled.utils.logd
 import io.reactivex.functions.Consumer
 
@@ -66,7 +63,15 @@ class MainActivity : VTBaseActivity(), VTBLECallback {
         super.onCreate(savedInstanceState)
         logd("onCreate")
         setContentView(R.layout.activity_main)
+        
+        // 初始化DeviceManager
+        DeviceManager.init(this)
+        
         initView()
+        
+        // 显示保存的设备信息（如果有的话）
+        updateDeviceInfo()
+        
         checkBluetoothAndPermissions()
     }
 
@@ -84,6 +89,10 @@ class MainActivity : VTBaseActivity(), VTBLECallback {
         tvDeviceAddress = findViewById(R.id.tv_device_address)
         btnReconnect = findViewById<Button>(R.id.btn_reconnect).apply {
             setOnClickListener { reconnect() }
+            setOnLongClickListener { 
+                clearSavedDevice()
+                true
+            }
         }
         updateDeviceInfo()
     }
@@ -194,12 +203,12 @@ class MainActivity : VTBaseActivity(), VTBLECallback {
             if (isConnected) {
                 ledController.drawStaticText(text, sbStaticTextSize.progress)
                 hideKeyboard(this)
-                showToast("静态文字已发送")
+                ToastUtil.show(this, "静态文字已发送")
             } else {
-                showToast("设备未连接")
+                ToastUtil.show(this, "设备未连接")
             }
         } else {
-            showToast("请输入文字内容")
+            ToastUtil.show(this, "请输入文字内容")
         }
     }
 
@@ -209,17 +218,17 @@ class MainActivity : VTBaseActivity(), VTBLECallback {
             if (isConnected) {
                 ledController.drawScrollingText(text, sbScrollTextSize.progress, sbScrollTextSpeed.progress)
                 hideKeyboard(this)
-                showToast("滚动文字已发送")
+                ToastUtil.show(this, "滚动文字已发送")
             } else {
-                showToast("设备未连接")
+                ToastUtil.show(this, "设备未连接")
             }
         } else {
-            showToast("请输入文字内容")
+            ToastUtil.show(this, "请输入文字内容")
         }
     }
 
     private fun checkBluetoothAndPermissions() {
-        if (!VTBluetoothUtil.isEnable()) {
+        if (!VTBluetoothUtil.isEnable(this)) {
             turnOnBluetooth()
         } else {
             checkLocationPermission()
@@ -228,10 +237,33 @@ class MainActivity : VTBaseActivity(), VTBLECallback {
 
     private fun reconnect() {
         if (isConnected) {
-            showToast("设备已连接")
+            logd("=== MainActivity: 设备已连接，无需重连 ===")
+            ToastUtil.show(this, R.string.device_already_connected)
             return
         }
+        
+        logd("=== MainActivity: 开始重连流程 ===")
+        
+        // 检查是否有保存的设备信息
+        if (DeviceManager.hasSavedDevice()) {
+            logd("发现保存的设备信息，将尝试直接连接")
+            ToastUtil.show(this, R.string.reconnecting_saved_device)
+        } else {
+            logd("未发现保存的设备信息，将使用扫描模式")
+            ToastUtil.show(this, R.string.no_saved_device)
+        }
+        
         checkLocationPermission()
+    }
+    
+    private fun clearSavedDevice() {
+        logd("=== MainActivity: 清除保存的设备信息 ===")
+        DeviceManager.clearSavedDevice()
+        // 重新初始化BLE控制器以使用默认设备地址
+        ledController.reinitializeBLE()
+        updateDeviceInfo()
+        ToastUtil.show(this, R.string.cleared_saved_device)
+        logd("设备信息清除完成")
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -240,7 +272,7 @@ class MainActivity : VTBaseActivity(), VTBLECallback {
             if (resultCode == Activity.RESULT_OK) {
                 checkLocationPermission()
             } else {
-                showToast(R.string.turn_on_failed)
+                ToastUtil.show(this, R.string.turn_on_failed)
             }
         }
     }
@@ -253,7 +285,7 @@ class MainActivity : VTBaseActivity(), VTBLECallback {
                     if (isGranted) {
                         connectToDevice()
                     } else {
-                        showToast(R.string.require_permission_failed)
+                        ToastUtil.show(this, R.string.require_permission_failed)
                     }
                 })
         } else {
@@ -262,6 +294,7 @@ class MainActivity : VTBaseActivity(), VTBLECallback {
     }
 
     private fun connectToDevice() {
+        logd("=== MainActivity: 开始连接设备 ===")
         startLoading("连接中...")
         ledController.connect(this)
     }
@@ -276,21 +309,21 @@ class MainActivity : VTBaseActivity(), VTBLECallback {
         startActivityForResult(enableBtIntent, REQUEST_ENABLE_BLUETOOTH)
     }
 
-    private fun showToast(msg: String) {
-        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
-    }
-
-    private fun showToast(stringId: Int) {
-        Toast.makeText(this, stringId, Toast.LENGTH_SHORT).show()
-    }
-
     private fun updateDeviceInfo() {
-        tvDeviceName.text = "设备名称："
-        tvDeviceAddress.text = ""
+        if (isConnected) {
+            // 如果已连接，显示当前连接信息（由onConnected方法设置）
+
+        } else {
+            tvDeviceName.text = "设备名称："
+            tvDeviceAddress.text = ""
+        }
     }
 
     private fun updateBrightnessDisplay() {
-        tvBrightnessValue.text = "$currentBrightness%"
+        runOnUiThread {
+            tvBrightnessValue.text = "$currentBrightness%"
+        }
+
     }
 
     //////BLE 回调相关///////
@@ -304,10 +337,14 @@ class MainActivity : VTBaseActivity(), VTBLECallback {
 
     override fun onDisConnected() {
         runOnUiThread {
-            isConnected = false
-            updateDeviceInfo()
-            showToast(R.string.disconnected)
-            btnReconnect.isEnabled = true
+            if (!isFinishing && !isDestroyed) {
+                logd("=== MainActivity: 设备断开连接回调 ===")
+                isConnected = false
+                updateDeviceInfo()
+                stopLoading()
+                ToastUtil.show(this, R.string.disconnected)
+                btnReconnect.isEnabled = true
+            }
         }
     }
 
@@ -319,32 +356,45 @@ class MainActivity : VTBaseActivity(), VTBLECallback {
 
     override fun onScanFailed() {
         runOnUiThread {
-            isConnected = false
-            updateDeviceInfo()
-            stopLoading()
-            showToast(R.string.find_no_device)
+            if (!isFinishing && !isDestroyed) {
+                logd("=== MainActivity: 扫描失败回调 ===")
+                isConnected = false
+                updateDeviceInfo()
+                stopLoading()
+                ToastUtil.show(this, R.string.find_no_device)
+            }
         }
     }
 
     override fun onConnected(name: String?, address: String?) {
         runOnUiThread {
-            isConnected = true
-            name?.let {
-                tvDeviceName.text = "设备名称: $it"
-            }
-            address?.let {
-                tvDeviceAddress.text = it
-            }
+            if (!isFinishing && !isDestroyed) {
+                logd("=== MainActivity: 设备连接成功回调 ===")
+                logd("设备名称: ${name ?: "未知"}")
+                logd("设备地址: ${address ?: "未知"}")
+                
+                isConnected = true
+                name?.let {
+                    tvDeviceName.text = "设备名称: $it"
+                }
+                address?.let {
+                    tvDeviceAddress.text = it
+                }
 
-            showToast(R.string.connected)
-            stopLoading()
-            btnReconnect.isEnabled = false
+                ToastUtil.show(this, R.string.connected)
+                stopLoading()
+                btnReconnect.isEnabled = false
+            }
         }
     }
 
     override fun writeDataCallback(isSuccess: Boolean) {
         runOnUiThread {
-            showToast(if (isSuccess) R.string.write_success else R.string.write_failed)
+            if (!isFinishing && !isDestroyed) {
+                if(!isSuccess) {
+                    ToastUtil.show(this, R.string.write_failed)
+                }
+            }
         }
     }
 
@@ -355,5 +405,11 @@ class MainActivity : VTBaseActivity(), VTBLECallback {
             view = View(context)
         }
         imm.hideSoftInputFromWindow(view.windowToken, 0)
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        // 清理Toast，避免内存泄漏
+        ToastUtil.clear()
     }
 }

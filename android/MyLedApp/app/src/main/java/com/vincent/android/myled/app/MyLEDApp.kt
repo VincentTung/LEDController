@@ -1,6 +1,7 @@
 package com.vincent.android.myled.app
 
 import android.app.Application
+import com.tencent.mmkv.MMKV
 import com.vincent.android.myled.led.LEDController
 import com.vincent.android.myled.utils.ConfigManager
 
@@ -8,6 +9,9 @@ class MyLEDApp: Application() {
 
     override fun onCreate() {
         super.onCreate()
+        
+        // 初始化MMKV
+        MMKV.initialize(this)
         
         // 初始化配置管理器
         ConfigManager.init(this)
