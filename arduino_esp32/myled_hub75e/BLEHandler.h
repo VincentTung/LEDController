@@ -206,6 +206,9 @@ private:
     MatrixPanel_I2S_DMA* dma_display;
     AnimatedGIF* gif;
     
+    // 特征值指针
+    BLECharacteristic* pBrightnessCharacteristic;
+    
     // 回调函数指针
     void (*setTextSizeFunc)(int);
     void (*setTextScrollSpeedFunc)(int);
@@ -219,6 +222,9 @@ private:
     bool* isScrollText;
     bool* isShowGIF;
     
+    // 静态实例指针，用于在回调中访问
+    static BLEHandler* instance;
+    
 public:
     BLEHandler(MatrixPanel_I2S_DMA* display, AnimatedGIF* gifDecoder,
                void (*textSizeFunc)(int), void (*scrollSpeedFunc)(int),
@@ -229,6 +235,12 @@ public:
     void init();
     void startAdvertising();
     void stopAdvertising();
+    
+    // 新增方法：发送当前亮度值
+    void sendCurrentBrightness(int brightness);
+    
+    // 静态方法：发送当前亮度值（用于在回调中调用）
+    static void sendCurrentBrightnessStatic(int brightness);
     
 private:
     void createCharacteristics();

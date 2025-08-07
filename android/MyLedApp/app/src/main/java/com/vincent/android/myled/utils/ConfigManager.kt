@@ -3,13 +3,8 @@ package com.vincent.android.myled.utils
 import android.content.Context
 import com.tencent.mmkv.MMKV
 
-/**
- * 配置管理类
- * 统一管理应用配置和用户偏好设置
- * 使用MMKV替代SharedPreferences，提供更好的性能
- */
 object ConfigManager {
-    
+
     private const val MMKV_ID = "led_controller_config"
     private const val KEY_LAST_BRIGHTNESS = "last_brightness"
     private const val KEY_LAST_STATIC_TEXT_SIZE = "last_static_text_size"
@@ -17,11 +12,12 @@ object ConfigManager {
     private const val KEY_LAST_SCROLL_SPEED = "last_scroll_speed"
     private const val KEY_AUTO_CONNECT = "auto_connect"
     private const val KEY_REAL_TIME_UPDATE = "real_time_update"
-    
+
     private var mmkv: MMKV? = null
-    
+
     fun init(context: Context) {
         try {
+            MMKV.initialize(context.applicationContext)
             mmkv = MMKV.mmkvWithID(MMKV_ID)
            logd(LOG_TAG, "=== ConfigManager: 初始化MMKV ===")
            logd(LOG_TAG, "MMKV初始化完成，ID: $MMKV_ID")
@@ -29,7 +25,7 @@ object ConfigManager {
             loge(LOG_TAG, "ConfigManager MMKV初始化失败: ${e.message}")
         }
     }
-    
+
     // 亮度设置
     var lastBrightness: Int
         get() {
@@ -48,7 +44,7 @@ object ConfigManager {
                 loge(LOG_TAG, "保存亮度设置失败: ${e.message}")
             }
         }
-    
+
     // 静态文字大小
     var lastStaticTextSize: Int
         get() {
@@ -67,7 +63,7 @@ object ConfigManager {
                 loge(LOG_TAG, "保存静态文字大小失败: ${e.message}")
             }
         }
-    
+
     // 滚动文字大小
     var lastScrollTextSize: Int
         get() {
@@ -86,7 +82,7 @@ object ConfigManager {
                 loge(LOG_TAG, "保存滚动文字大小失败: ${e.message}")
             }
         }
-    
+
     // 滚动速度
     var lastScrollSpeed: Int
         get() {
@@ -105,7 +101,7 @@ object ConfigManager {
                 loge(LOG_TAG, "保存滚动速度失败: ${e.message}")
             }
         }
-    
+
     // 自动连接
     var autoConnect: Boolean
         get() {
@@ -124,7 +120,7 @@ object ConfigManager {
                 loge(LOG_TAG, "保存自动连接设置失败: ${e.message}")
             }
         }
-    
+
     // 实时更新
     var realTimeUpdate: Boolean
         get() {
@@ -143,7 +139,7 @@ object ConfigManager {
                 loge(LOG_TAG, "保存实时更新设置失败: ${e.message}")
             }
         }
-    
+
     /**
      * 清除所有配置
      */
@@ -156,7 +152,7 @@ object ConfigManager {
             loge(LOG_TAG, "清除配置失败: ${e.message}")
         }
     }
-    
+
     /**
      * 重置为默认值
      */
@@ -174,7 +170,7 @@ object ConfigManager {
             loge(LOG_TAG, "重置配置失败: ${e.message}")
         }
     }
-    
+
     /**
      * 获取所有配置信息（用于调试）
      */
@@ -193,7 +189,7 @@ object ConfigManager {
             "获取配置信息失败: ${e.message}"
         }
     }
-    
+
     /**
      * 检查MMKV是否已初始化
      */

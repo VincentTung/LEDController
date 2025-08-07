@@ -50,6 +50,7 @@ class MainActivity : VTBaseActivity(), VTBLECallback {
 
     private lateinit var tvScrollTextSpeed: TextView
     private lateinit var sbScrollTextSpeed: SeekBar
+    private lateinit var btnPhyInfo: Button
 
     // 业务逻辑
     private val ledController: LEDController = LEDController.getInstance()
@@ -94,6 +95,11 @@ class MainActivity : VTBaseActivity(), VTBLECallback {
                 true
             }
         }
+        
+        btnPhyInfo = findViewById<Button>(R.id.btn_phy_info).apply {
+            setOnClickListener { showPhyInfo() }
+        }
+        
         updateDeviceInfo()
     }
 
@@ -142,6 +148,12 @@ class MainActivity : VTBaseActivity(), VTBLECallback {
         
         findViewById<TextView>(R.id.btn_draw_gif).setOnClickListener {
             startActivity(Intent(this, GIFActivity::class.java))
+        }
+        
+        // 添加配对按钮（长按重连按钮显示配对信息）
+        btnReconnect.setOnLongClickListener {
+            showBondingDialog()
+            true
         }
     }
 
@@ -330,9 +342,24 @@ class MainActivity : VTBaseActivity(), VTBLECallback {
 
     override fun onCheckCharacteristicSuccess() {
         ledController.drawDefault()
-        sbBrightness.progress = LED_DEFAULT_BRIGHTNESS
-        currentBrightness = LED_DEFAULT_BRIGHTNESS
-        updateBrightnessDisplay()
+        // 不再设置默认亮度，等待从ESP32接收当前亮度值
+        logd("=== MainActivity: 连接成功，等待接收ESP32的亮度值 ===")
+    }
+    
+    override fun onBrightnessReceived(brightness: Int) {
+        logd("=== MainActivity: 收到ESP32的亮度值 ===")
+        logd("亮度值: $brightness")
+        
+        // 将ESP32的亮度值转换为百分比显示
+        val brightnessPercent = (brightness * 100 / 255).coerceIn(0, 100)
+        currentBrightness = brightnessPercent
+        
+        runOnUiThread {
+            sbBrightness.progress = currentBrightness
+            updateBrightnessDisplay()
+        }
+        
+        logd("亮度值已更新到界面: $brightnessPercent%")
     }
 
     override fun onDisConnected() {
@@ -397,6 +424,197 @@ class MainActivity : VTBaseActivity(), VTBLECallback {
             }
         }
     }
+    
+    // MTU协商相关回调
+    override fun onMtuNegotiationSuccess(mtu: Int) {
+        runOnUiThread {
+            if (!isFinishing && !isDestroyed) {
+                logd("=== MainActivity: MTU协商成功 ===")
+                logd("协商后的MTU大小: $mtu 字节")
+                
+                when {
+                    mtu >= 512 -> {
+                        ToastUtil.show(this, getString(R.string.mtu_negotiation_success_optimal, mtu))
+                    }
+                    mtu >= 256 -> {
+                        ToastUtil.show(this, getString(R.string.mtu_negotiation_success_good, mtu))
+                    }
+                    mtu >= 128 -> {
+                        ToastUtil.show(this, getString(R.string.mtu_negotiation_success_normal, mtu))
+                    }
+                    else -> {
+                        ToastUtil.show(this, getString(R.string.mtu_negotiation_success_slow, mtu))
+                    }
+                }
+            }
+        }
+    }
+    
+    override fun onMtuNegotiationFailed(requestedMtu: Int, actualMtu: Int) {
+        runOnUiThread {
+            if (!isFinishing && !isDestroyed) {
+                logd("=== MainActivity: MTU协商失败 ===")
+                logd("请求的MTU大小: $requestedMtu 字节")
+                logd("实际使用的MTU大小: $actualMtu 字节")
+                
+                ToastUtil.show(this, getString(R.string.mtu_negotiation_failed, actualMtu))
+                logd("数据传输可能会较慢，但功能不受影响")
+            }
+        }
+    }
+    
+    // PHY协商相关回调
+    override fun onPhyNegotiationSuccess(txPhy: Int, rxPhy: Int) {
+        runOnUiThread {
+            if (!isFinishing && !isDestroyed) {
+                logd("=== MainActivity: PHY协商成功 ===")
+                logd("TX PHY: $txPhy, RX PHY: $rxPhy")
+                
+                val message = when (txPhy) {
+                    2 -> getString(R.string.phy_negotiation_success_2m)
+                    3 -> getString(R.string.phy_negotiation_success_coded)
+                    else -> getString(R.string.phy_negotiation_success_1m)
+                }
+                ToastUtil.show(this, message)
+            }
+        }
+    }
+    
+    override fun onPhyNegotiationFailed(requestedPhy: Int, actualPhy: Int) {
+        runOnUiThread {
+            if (!isFinishing && !isDestroyed) {
+                logd("=== MainActivity: PHY协商失败 ===")
+                logd("请求的PHY: $requestedPhy")
+                logd("实际的PHY: $actualPhy")
+                
+                ToastUtil.show(this, getString(R.string.phy_negotiation_failed))
+                logd("将使用默认PHY，功能不受影响")
+            }
+        }
+    }
+    
+    override fun onPhyReadSuccess(txPhy: Int, rxPhy: Int) {
+        runOnUiThread {
+            if (!isFinishing && !isDestroyed) {
+                logd("=== MainActivity: PHY读取成功 ===")
+                logd("TX PHY: $txPhy, RX PHY: $rxPhy")
+                
+                val txPhyDesc = getPhyDescription(txPhy)
+                val rxPhyDesc = getPhyDescription(rxPhy)
+                ToastUtil.show(this, getString(R.string.phy_read_success, txPhyDesc, rxPhyDesc))
+            }
+        }
+    }
+    
+    override fun onPhyReadFailed() {
+        runOnUiThread {
+            if (!isFinishing && !isDestroyed) {
+                logd("=== MainActivity: PHY读取失败 ===")
+                ToastUtil.show(this, getString(R.string.phy_read_failed))
+            }
+        }
+    }
+    
+    override fun onPhyUpdateSuccess(txPhy: Int, rxPhy: Int) {
+        runOnUiThread {
+            if (!isFinishing && !isDestroyed) {
+                logd("=== MainActivity: PHY更新成功 ===")
+                logd("新的TX PHY: $txPhy, 新的RX PHY: $rxPhy")
+                
+                val txPhyDesc = getPhyDescription(txPhy)
+                val rxPhyDesc = getPhyDescription(rxPhy)
+                ToastUtil.show(this, getString(R.string.phy_update_success, txPhyDesc, rxPhyDesc))
+            }
+        }
+    }
+    
+    override fun onPhyUpdateFailed() {
+        runOnUiThread {
+            if (!isFinishing && !isDestroyed) {
+                logd("=== MainActivity: PHY更新失败 ===")
+                ToastUtil.show(this, getString(R.string.phy_update_failed))
+            }
+        }
+    }
+    
+    // 配对相关回调
+    override fun onBondingSuccess(name: String?, address: String?) {
+        runOnUiThread {
+            if (!isFinishing && !isDestroyed) {
+                logd("=== MainActivity: 配对成功 ===")
+                logd("设备名称: ${name ?: "未知"}")
+                logd("设备地址: ${address ?: "未知"}")
+                
+                ToastUtil.show(this, R.string.bonding_success)
+                updateDeviceInfo() // 更新设备信息显示
+            }
+        }
+    }
+    
+    /**
+     * 获取PHY描述信息
+     */
+    private fun getPhyDescription(phy: Int): String {
+        return when (phy) {
+            1 -> "1M PHY"
+            2 -> "2M PHY"
+            3 -> "Coded PHY"
+            else -> "Unknown PHY ($phy)"
+        }
+    }
+    
+    /**
+     * 显示PHY信息
+     */
+    private fun showPhyInfo() {
+        logd("=== 显示PHY信息 ===")
+        
+        val phyInfo = StringBuilder()
+        phyInfo.append("=== PHY连接信息 ===\n\n")
+        
+        // 设备支持情况
+        val supports2M = ledController.isLe2MPhySupported()
+        val supportsCoded = ledController.isLeCodedPhySupported()
+        val supportedPhys = ledController.getSupportedPhys()
+        
+        phyInfo.append("设备PHY支持:\n")
+        phyInfo.append("- 2M PHY: ${if (supports2M) "✓" else "✗"}\n")
+        phyInfo.append("- Coded PHY: ${if (supportsCoded) "✓" else "✗"}\n")
+        phyInfo.append("- 支持的PHY: $supportedPhys\n\n")
+        
+        if (isConnected) {
+            // 当前连接信息
+            val currentTxPhy = ledController.getCurrentTxPhy()
+            val currentRxPhy = ledController.getCurrentRxPhy()
+            val phyNegotiationSuccess = ledController.isPhyNegotiationSuccessful()
+            
+            phyInfo.append("当前连接状态:\n")
+            phyInfo.append("- TX PHY: ${getPhyDescription(currentTxPhy)}\n")
+            phyInfo.append("- RX PHY: ${getPhyDescription(currentRxPhy)}\n")
+            phyInfo.append("- PHY协商: ${if (phyNegotiationSuccess) "✓ 成功" else "✗ 失败"}\n\n")
+            
+            // 连接质量信息
+            val qualityInfo = ledController.getConnectionQualityInfo()
+            phyInfo.append("连接质量:\n$qualityInfo\n")
+        } else {
+            phyInfo.append("设备未连接，无法获取PHY信息\n")
+        }
+        
+        // 显示对话框
+        android.app.AlertDialog.Builder(this)
+            .setTitle("PHY连接信息")
+            .setMessage(phyInfo.toString())
+            .setPositiveButton("确定", null)
+            .setNegativeButton("测试PHY") { _, _ ->
+                if (isConnected) {
+                    ledController.readCurrentPhy()
+                    ToastUtil.show(this, "正在读取PHY信息...")
+                } else {
+                    ToastUtil.show(this, "设备未连接")
+                }
+            }
+            .show()
+    }
 
     private fun hideKeyboard(context: Activity) {
         val imm = context.getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
@@ -405,6 +623,51 @@ class MainActivity : VTBaseActivity(), VTBLECallback {
             view = View(context)
         }
         imm.hideSoftInputFromWindow(view.windowToken, 0)
+    }
+    
+    /**
+     * 显示配对对话框
+     */
+    private fun showBondingDialog() {
+        logd("=== 显示配对对话框 ===")
+        
+        val bondingInfo = StringBuilder()
+        bondingInfo.append("=== 设备配对信息 ===\n\n")
+        
+        // 设备信息摘要
+        val deviceInfo = ledController.getDeviceInfoSummary()
+        bondingInfo.append("$deviceInfo\n\n")
+        
+        if (isConnected) {
+            // 配对状态信息
+            val bondingStatus = ledController.getBondingStatusInfo()
+            bondingInfo.append("$bondingStatus\n\n")
+            
+            // 连接质量信息
+            val qualityInfo = ledController.getConnectionQualityInfo()
+            bondingInfo.append("$qualityInfo\n")
+        } else {
+            bondingInfo.append("设备未连接，无法获取配对状态\n")
+        }
+        
+        // 显示对话框
+        android.app.AlertDialog.Builder(this)
+            .setTitle("设备配对信息")
+            .setMessage(bondingInfo.toString())
+            .setPositiveButton("确定", null)
+            .setNegativeButton("请求配对") { _, _ ->
+                if (isConnected) {
+                    ledController.requestBonding()
+                    ToastUtil.show(this, "正在请求配对...")
+                } else {
+                    ToastUtil.show(this, "设备未连接")
+                }
+            }
+            .setNeutralButton("清除设备") { _, _ ->
+                clearSavedDevice()
+                ToastUtil.show(this, "设备信息已清除")
+            }
+            .show()
     }
     
     override fun onDestroy() {

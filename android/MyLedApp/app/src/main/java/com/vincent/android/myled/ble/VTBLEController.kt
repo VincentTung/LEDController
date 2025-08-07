@@ -10,21 +10,34 @@ import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import com.vincent.android.myled.ble.VTBluetoothUtil.getBluetoothAdapter
-import com.vincent.android.myled.utils.BLE_MTU_SIZE
+
 import com.vincent.android.myled.utils.CONNECTION_MONITOR_INTERVAL
 import com.vincent.android.myled.utils.CONNECTION_TIMEOUT
 import com.vincent.android.myled.utils.DEVICE_NAME
 import com.vincent.android.myled.utils.LED_SERVICE_UUID
 import com.vincent.android.myled.utils.MAX_RETRY_COUNT
+import com.vincent.android.myled.utils.MTU_ACCEPTABLE
+import com.vincent.android.myled.utils.MTU_DEFAULT
+import com.vincent.android.myled.utils.MTU_FALLBACK
+import com.vincent.android.myled.utils.MTU_GOOD
+import com.vincent.android.myled.utils.MTU_OPTIMAL
 import com.vincent.android.myled.utils.RETRY_DELAY
 import com.vincent.android.myled.utils.SCAN_TIMEOUT
 import com.vincent.android.myled.utils.SERVICE_DISCOVERY_TIMEOUT
 import com.vincent.android.myled.utils.logd
 import com.vincent.android.myled.utils.CoroutineUtil
+import com.vincent.android.myled.utils.PHY_1M
+import com.vincent.android.myled.utils.DeviceManager
+import com.vincent.android.myled.utils.LED_CHARACTERISTIC_BRIGHTNESS_UUID
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import kotlin.math.min
 
 /**
@@ -39,6 +52,8 @@ enum class BLEConnectionState {
     ERROR           // 错误状态
 }
 
+private const val SCOPE_NAME = "VTBLEController"
+
 @SuppressLint("MissingPermission")
 class VTBLEController(
     private val mContext: Context,
@@ -47,7 +62,7 @@ class VTBLEController(
 ) {
 
     companion object{
-        private const val TAG = "VTBLEController"
+        private const val TAG = SCOPE_NAME
     }
     private var mGatt: BluetoothGatt? = null
     private var mCharacteristic: BluetoothGattCharacteristic? = null
@@ -71,6 +86,36 @@ class VTBLEController(
     
     // 重连机制
     private var retryCount = 0
+    
+    // MTU协商相关
+    private var currentMtu = MTU_DEFAULT // 默认MTU大小
+    private var mtuNegotiationAttempted = false
+    private var mtuNegotiationFailed = false
+    
+    // PHY管理
+    private val phyManager = VTPhyManager(mContext)
+    
+    // 配对管理
+    private var isBonding = false
+    private var bondingDevice: BluetoothDevice? = null
+    
+    // 配对状态广播接收器
+    private val bondStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                BluetoothDevice.ACTION_BOND_STATE_CHANGED -> {
+                    val device = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+                    }
+                    val bondState = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR)
+                    handleBondStateChange(device, bondState)
+                }
+            }
+        }
+    }
 
     /**
      * 处理连接失败
@@ -80,10 +125,17 @@ class VTBLEController(
         connectionState = BLEConnectionState.ERROR
         isConnecting = false
         
+        // 注销配对状态广播接收器
+        try {
+            mContext.unregisterReceiver(bondStateReceiver)
+        } catch (e: Exception) {
+            logd("注销广播接收器异常: ${e.message}")
+        }
+        
         if (retryCount < MAX_RETRY_COUNT) {
             retryCount++
             logd("准备第 $retryCount 次重试连接...")
-            retryJob = CoroutineUtil.delayInScope("VTBLEController", RETRY_DELAY) {
+            retryJob = CoroutineUtil.delayInScope(SCOPE_NAME, RETRY_DELAY) {
                 if (connectionState == BLEConnectionState.ERROR) {
                     logd("开始重试连接...")
                     retryConnection()
@@ -114,7 +166,7 @@ class VTBLEController(
      */
     private fun startConnectionMonitor() {
         stopConnectionMonitor()
-        connectionMonitorJob = CoroutineUtil.timerInScope("VTBLEController", CONNECTION_MONITOR_INTERVAL) {
+        connectionMonitorJob = CoroutineUtil.timerInScope(SCOPE_NAME, CONNECTION_MONITOR_INTERVAL) {
             if (connectionState == BLEConnectionState.CONNECTED || 
                 connectionState == BLEConnectionState.READY) {
                 // 检查GATT连接状态
@@ -152,6 +204,14 @@ class VTBLEController(
         logd("=== 处理意外断开连接 ===")
         connectionState = BLEConnectionState.DISCONNECTED
         stopConnectionMonitor()
+        
+        // 注销配对状态广播接收器
+        try {
+            mContext.unregisterReceiver(bondStateReceiver)
+        } catch (e: Exception) {
+            logd("注销广播接收器异常: ${e.message}")
+        }
+        
         mBLEVTBLECallback.onDisConnected()
     }
     
@@ -287,7 +347,7 @@ class VTBLEController(
         bluetoothLeScanner.startScan(scanFilters, scanSettings, mScanCallback)
         
         // 使用协程设置扫描超时
-        scanTimeoutJob = CoroutineUtil.delayInScope("VTBLEController", SCAN_TIMEOUT) {
+        scanTimeoutJob = CoroutineUtil.delayInScope(SCOPE_NAME, SCAN_TIMEOUT) {
             logd("=== 扫描超时 ===")
             logd("扫描时间超过 ${SCAN_TIMEOUT}ms，停止扫描")
             stopScan()
@@ -402,11 +462,21 @@ class VTBLEController(
         logd("设备地址: ${device.address}")
         logd("连接超时时间: ${CONNECTION_TIMEOUT}ms")
         
+        // 重置MTU协商状态
+        resetMtuNegotiationState()
+        
+        // 重置PHY协商状态
+        phyManager.resetPhyNegotiationState()
+        
         isConnecting = true
         updateConnectionState(BLEConnectionState.CONNECTING)
         
+        // 注册配对状态广播接收器
+        val bondFilter = IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
+        mContext.registerReceiver(bondStateReceiver, bondFilter)
+        
         // 使用协程设置连接超时
-        connectionTimeoutJob = CoroutineUtil.delayInScope("VTBLEController", CONNECTION_TIMEOUT) {
+        connectionTimeoutJob = CoroutineUtil.delayInScope(SCOPE_NAME, CONNECTION_TIMEOUT) {
             logd("=== 连接超时 ===")
             logd("连接时间超过 ${CONNECTION_TIMEOUT}ms，断开连接")
             disconnect()
@@ -414,7 +484,7 @@ class VTBLEController(
         }
         
         // 使用协程设置服务发现超时
-        serviceDiscoveryTimeoutJob = CoroutineUtil.delayInScope("VTBLEController", SERVICE_DISCOVERY_TIMEOUT) {
+        serviceDiscoveryTimeoutJob = CoroutineUtil.delayInScope(SCOPE_NAME, SERVICE_DISCOVERY_TIMEOUT) {
             logd("=== 服务发现超时 ===")
             logd("服务发现时间超过 ${SERVICE_DISCOVERY_TIMEOUT}ms")
             disconnect()
@@ -449,14 +519,19 @@ class VTBLEController(
                             logd("已保存设备地址用于快速重连: ${device.address}")
                         }
                         
+                        // 检查是否需要配对
+                        checkAndRequestBonding(device)
+                        
                         updateConnectionState(BLEConnectionState.CONNECTED)
                         mBLEVTBLECallback.onConnected(device.name, device.address)
                         
-                        // 请求MTU大小 - 使用更保守的值
+                        // 请求MTU大小 - 使用智能协商策略
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                            val mtuRequested = gatt?.requestMtu(512)
-                            logd("MTU请求状态: $mtuRequested, 请求大小: 512")
+                            requestMtuWithFallback(gatt)
                         }
+                        
+                        // 开始PHY协商 - 在MTU协商之后进行
+                        startPhyNegotiation(gatt)
                         
                         logd("开始发现服务...")
                         updateConnectionState(BLEConnectionState.DISCOVERING)
@@ -510,27 +585,36 @@ class VTBLEController(
                 super.onCharacteristicChanged(gatt, characteristic)
                 characteristic?.value?.let { value ->
                     val stringValue = String(value, Charsets.UTF_8)
-                    logd("Characteristic changed: $stringValue")
+                    val characteristicUUID = characteristic.uuid.toString()
+                    logd("Characteristic changed: $characteristicUUID = $stringValue")
+                    
+                    // 处理亮度特征的通知
+                    if (characteristicUUID == LED_CHARACTERISTIC_BRIGHTNESS_UUID) {
+                        try {
+                            val brightness = stringValue.toInt()
+                            logd("收到亮度通知: $brightness")
+                            // 通知回调处理亮度值
+                            mBLEVTBLECallback.onBrightnessReceived(brightness)
+                        } catch (e: NumberFormatException) {
+                            logd("亮度值格式错误: $stringValue")
+                        }
+                    }
                 }
             }
             
             override fun onMtuChanged(gatt: BluetoothGatt?, mtu: Int, status: Int) {
                 super.onMtuChanged(gatt, mtu, status)
-                if (status == BluetoothGatt.GATT_SUCCESS) {
-                    logd("=== MTU设置成功 ===")
-                    logd("新的MTU大小: $mtu 字节")
-                    logd("请求的MTU大小: 512 字节")
-                    if (mtu < 512) {
-                        logd("警告: 实际MTU大小($mtu)小于请求大小(512)")
-                        logd("这可能会影响数据传输效率")
-                    }
-                } else {
-                    logd("=== MTU设置失败 ===")
-                    logd("状态码: $status")
-                    logd("请求的MTU大小: $BLE_MTU_SIZE 字节")
-                    logd("将使用默认MTU大小(23字节)进行数据传输")
-                    logd("这可能会导致数据传输较慢")
-                }
+                handleMtuNegotiationResult(gatt, mtu, status)
+            }
+            
+            override fun onPhyRead(gatt: BluetoothGatt?, txPhy: Int, rxPhy: Int, status: Int) {
+                super.onPhyRead(gatt, txPhy, rxPhy, status)
+                phyManager.handlePhyReadResult(txPhy, rxPhy, status)
+            }
+            
+            override fun onPhyUpdate(gatt: BluetoothGatt?, txPhy: Int, rxPhy: Int, status: Int) {
+                super.onPhyUpdate(gatt, txPhy, rxPhy, status)
+                phyManager.handlePhyUpdateResult(txPhy, rxPhy, status)
             }
             
             override fun onCharacteristicWrite(
@@ -555,6 +639,10 @@ class VTBLEController(
                 
                 mBLEVTBLECallback.writeDataCallback(status == BluetoothGatt.GATT_SUCCESS)
             }
+            
+            // 配对状态变化回调 - 使用广播接收器处理
+            // onBondStateChanged 不是 BluetoothGattCallback 的方法
+            // 配对状态变化通过广播接收器处理
         }, connectOptions)
     }
 
@@ -564,6 +652,7 @@ class VTBLEController(
     private fun checkCharacteristic(gatt: BluetoothGatt, service: BluetoothGattService?) {
         logd("=== 检查特征值 ===")
         var foundTargetCharacteristic = false
+        var foundBrightnessCharacteristic = false
         
         service?.characteristics?.forEach { characteristic ->
             val characUUID = characteristic.uuid.toString()
@@ -590,12 +679,34 @@ class VTBLEController(
                 }
                 return@forEach
             }
+            
+            // 检查亮度特征
+            if (characUUID == LED_CHARACTERISTIC_BRIGHTNESS_UUID) {
+                logd("=== 找到亮度特征值 ===")
+                logd("亮度特征值UUID: $characUUID")
+                foundBrightnessCharacteristic = true
+                
+                // 启用亮度特征的通知
+                val success = gatt.setCharacteristicNotification(characteristic, true)
+                logd("亮度特征值通知启用状态: $success")
+                
+                if (!success) {
+                    logd("警告: 启用亮度特征值通知失败")
+                }
+            }
         }
         
         // 如果没有找到目标特征值
         if (!foundTargetCharacteristic) {
             logd("错误: 未找到目标特征值: $mDeviceCharacteristicID")
             handleConnectionFailure("未找到目标特征值")
+        }
+        
+        // 记录亮度特征查找结果
+        if (foundBrightnessCharacteristic) {
+            logd("亮度特征值查找成功")
+        } else {
+            logd("警告: 未找到亮度特征值")
         }
     }
 
@@ -656,6 +767,7 @@ class VTBLEController(
 
     /**
      * 同步发送字节数据（等待确认）
+     * 注意：此方法仍保持同步接口以兼容现有代码，但内部使用协程优化
      */
     fun sendBytesSync(serviceUUID: String, characteristicUUID: String, bytes: ByteArray): Boolean {
         if (connectionState != BLEConnectionState.READY) {
@@ -686,26 +798,46 @@ class VTBLEController(
             return false
         }
         
-        // 等待写入完成，最多等待2秒
-        var waitCount = 0
-        while (syncWritePending && waitCount < 200) { // 200 * 10ms = 2秒
-            try {
-                Thread.sleep(10) // 等待10ms
+        // 使用协程等待写入完成，最多等待2秒
+        return runBlocking {
+            var waitCount = 0
+            while (syncWritePending && waitCount < 200) { // 200 * 10ms = 2秒
+                delay(10) // 使用协程delay替代Thread.sleep
                 waitCount++
-            } catch (e: InterruptedException) {
-                logd("等待写入完成时被中断")
-                break
+            }
+            
+            if (syncWritePending) {
+                logd("同步写入超时")
+                syncWritePending = false
+                false
+            } else {
+                logd("同步写入完成，结果: $syncWriteResult")
+                syncWriteResult
             }
         }
-        
-        if (syncWritePending) {
-            logd("同步写入超时")
-            syncWritePending = false
-            return false
+    }
+
+    /**
+     * 写入特征值的辅助方法，兼容新旧API
+     */
+    private fun writeCharacteristicCompat(
+        gatt: BluetoothGatt,
+        characteristic: BluetoothGattCharacteristic,
+        data: ByteArray,
+        writeType: Int = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+    ): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val result = gatt.writeCharacteristic(characteristic, data, writeType)
+            result == BluetoothGatt.GATT_SUCCESS
+        } else {
+            try {
+                characteristic.setValue(data)
+                gatt.writeCharacteristic(characteristic)
+            } catch (e: Exception) {
+                logd("兼容性写入失败: ${e.message}")
+                false
+            }
         }
-        
-        logd("同步写入完成，结果: $syncWriteResult")
-        return syncWriteResult
     }
 
     /**
@@ -716,7 +848,7 @@ class VTBLEController(
         characteristic: BluetoothGattCharacteristic,
         data: ByteArray
     ) {
-        val chunkSize = BLE_MTU_SIZE // 使用配置的BLE块大小
+        val chunkSize = currentMtu // 使用动态MTU大小
         var offset = 0
         
         // 创建发送队列
@@ -743,7 +875,7 @@ class VTBLEController(
         currentIndex: Int
     ) {
         if (currentIndex >= sendQueue.size) {
-            logd("所有数据块发送完成，总大小: ${sendQueue.size * BLE_MTU_SIZE} 字节")
+            logd("所有数据块发送完成，总大小: ${sendQueue.size * currentMtu} 字节")
             // 清理发送状态
             currentSendQueue = null
             currentSendIndex = 0
@@ -754,8 +886,7 @@ class VTBLEController(
         }
         
         val chunk = sendQueue[currentIndex]
-        characteristic.setValue(chunk)
-        val success = bluetoothGatt.writeCharacteristic(characteristic)
+        val success = writeCharacteristicCompat(bluetoothGatt, characteristic, chunk)
         
         if (!success) {
             logd("发送数据块失败，索引: $currentIndex")
@@ -788,7 +919,7 @@ class VTBLEController(
             logd("数据块 ${index + 1} 发送确认成功")
             
             // 使用协程处理延迟，避免阻塞主线程
-            CoroutineUtil.delayInScope("VTBLEController", 20) {
+            CoroutineUtil.delayInScope(SCOPE_NAME, 20) {
                 // 发送下一个数据块
                 sendNextChunk(gatt, characteristic, queue, index + 1)
             }
@@ -817,23 +948,13 @@ class VTBLEController(
         data: ByteArray
     ) {
         try {
-//            logd("查找服务UUID: $serviceUUID")
-//            gatt.services.forEach { service ->
-//                logd("可用服务: ${service.uuid}")
-//            }
-            
             val service = gatt.services.find { it.uuid.toString() == serviceUUID }
             if (service == null) {
                 logd("Service not found: $serviceUUID")
                 mBLEVTBLECallback.writeDataCallback(false)
                 return
             }
-            
-//            logd("找到服务，查找特征值UUID: $characteristicUUID")
-//            service.characteristics.forEach { characteristic ->
-//                logd("可用特征值: ${characteristic.uuid}")
-//            }
-//
+
             val characteristic = service.characteristics.find { it.uuid.toString() == characteristicUUID }
             if (characteristic == null) {
                 logd("Characteristic not found: $characteristicUUID")
@@ -850,18 +971,16 @@ class VTBLEController(
             }
             
             // 根据数据大小选择发送方式
-            if (data.size > BLE_MTU_SIZE) {
+            if (data.size > currentMtu) {
                 logd("数据大小超过MTU大小，使用分块传输: ${data.size} 字节")
                 sendLargeData(gatt, characteristic, data)
             } else {
-                characteristic.setValue(data)
-                val isSuccess = gatt.writeCharacteristic(characteristic)
+                val isSuccess = writeCharacteristicCompat(gatt, characteristic, data)
                 logd("Write characteristic result: $isSuccess")
                 
                 if (!isSuccess) {
                     mBLEVTBLECallback.writeDataCallback(false)
                 }
-                // 成功的情况会在onCharacteristicWrite回调中处理
             }
             
         } catch (e: Exception) {
@@ -897,13 +1016,12 @@ class VTBLEController(
             }
             
             // 对于同步发送，只处理小数据包
-            if (data.size > BLE_MTU_SIZE) {
+            if (data.size > currentMtu) {
                 logd("同步发送不支持大数据包: ${data.size} 字节")
                 return false
             }
             
-            characteristic.setValue(data)
-            val isSuccess = gatt.writeCharacteristic(characteristic)
+            val isSuccess = writeCharacteristicCompat(gatt, characteristic, data)
             logd("Sync write characteristic request result: $isSuccess")
             
             return isSuccess
@@ -948,6 +1066,19 @@ class VTBLEController(
         isScanning = false
         updateConnectionState(BLEConnectionState.DISCONNECTED)
         
+        // 重置MTU协商状态
+        resetMtuNegotiationState()
+        
+        // 重置PHY协商状态
+        phyManager.resetPhyNegotiationState()
+        
+        // 注销配对状态广播接收器
+        try {
+            mContext.unregisterReceiver(bondStateReceiver)
+        } catch (e: Exception) {
+            logd("注销广播接收器异常: ${e.message}")
+        }
+        
         logd("BLE连接已断开")
     }
     
@@ -982,6 +1113,14 @@ class VTBLEController(
         isConnecting = false
         isScanning = false
         retryCount = 0
+        
+        // 确保注销广播接收器
+        try {
+            mContext.unregisterReceiver(bondStateReceiver)
+        } catch (e: Exception) {
+            logd("强制重置时注销广播接收器异常: ${e.message}")
+        }
+        
         logd("BLE控制器状态已重置")
     }
 
@@ -1070,8 +1209,376 @@ class VTBLEController(
         return mDeviceAddress.isNotEmpty()
     }
 
+    /**
+     * 智能MTU协商策略
+     * 优先尝试512字节，失败后降级到256字节，最后使用默认23字节
+     */
+    private fun requestMtuWithFallback(gatt: BluetoothGatt?) {
+        if (gatt == null) {
+            logd("GATT为空，无法请求MTU")
+            return
+        }
+        
+        if (mtuNegotiationAttempted) {
+            logd("MTU协商已尝试过，跳过重复请求")
+            return
+        }
+        
+        mtuNegotiationAttempted = true
+        mtuNegotiationFailed = false
+        
+        // 尝试请求理想MTU大小
+        logd("=== 开始MTU协商 ===")
+        logd("第一阶段：请求${MTU_OPTIMAL}字节MTU")
+        val mtuRequested = gatt.requestMtu(MTU_OPTIMAL)
+        logd("MTU请求状态: $mtuRequested, 请求大小: $MTU_OPTIMAL")
+        
+        if (!mtuRequested) {
+            logd("MTU请求失败，将使用默认MTU大小")
+            handleMtuNegotiationFailure(MTU_OPTIMAL, MTU_DEFAULT)
+        }
+    }
+    
+    /**
+     * 处理MTU协商结果
+     */
+    private fun handleMtuNegotiationResult(gatt: BluetoothGatt?, mtu: Int, status: Int) {
+        if (status == BluetoothGatt.GATT_SUCCESS) {
+            logd("=== MTU协商成功 ===")
+            logd("协商后的MTU大小: $mtu 字节")
+            currentMtu = mtu
+            
+            if (mtu >= MTU_OPTIMAL) {
+                logd("获得理想的MTU大小，数据传输效率最佳")
+            } else if (mtu >= MTU_GOOD) {
+                logd("获得较好的MTU大小，数据传输效率良好")
+            } else if (mtu >= MTU_ACCEPTABLE) {
+                logd("获得一般的MTU大小，数据传输效率一般")
+            } else {
+                logd("MTU大小较小，数据传输可能较慢")
+            }
+            
+            // 通知回调
+            mBLEVTBLECallback.onMtuNegotiationSuccess(mtu)
+            
+        } else {
+            logd("=== MTU协商失败 ===")
+            logd("状态码: $status")
+            logd("尝试降级到${MTU_FALLBACK}字节MTU")
+            
+            // 尝试降级到MTU_FALLBACK字节
+            if (!mtuNegotiationFailed) {
+                mtuNegotiationFailed = true
+                val fallbackRequested = gatt?.requestMtu(MTU_FALLBACK)
+                logd("降级MTU请求状态: $fallbackRequested, 请求大小: $MTU_FALLBACK")
+                
+                if (fallbackRequested == false) {
+                    logd("降级MTU请求也失败，使用默认MTU")
+                    handleMtuNegotiationFailure(MTU_FALLBACK, MTU_DEFAULT)
+                }
+            } else {
+                // 降级也失败了，使用默认MTU
+                handleMtuNegotiationFailure(MTU_FALLBACK, MTU_DEFAULT)
+            }
+        }
+    }
+    
+    /**
+     * 处理MTU协商失败
+     */
+    private fun handleMtuNegotiationFailure(requestedMtu: Int, actualMtu: Int) {
+        logd("=== MTU协商最终失败 ===")
+        logd("请求的MTU大小: $requestedMtu 字节")
+        logd("将使用默认MTU大小: $actualMtu 字节")
+        logd("数据传输可能会较慢，但功能不受影响")
+        
+        currentMtu = actualMtu
+        mtuNegotiationFailed = true
+        
+        // 通知回调
+        mBLEVTBLECallback.onMtuNegotiationFailed(requestedMtu, actualMtu)
+    }
+    
+    /**
+     * 获取当前MTU大小
+     */
+    fun getCurrentMtu(): Int {
+        return currentMtu
+    }
+    
+    /**
+     * 检查MTU协商是否成功
+     */
+    fun isMtuNegotiationSuccessful(): Boolean {
+        return mtuNegotiationAttempted && !mtuNegotiationFailed
+    }
+    
+    /**
+     * 重置MTU协商状态（用于重新连接时）
+     */
+    private fun resetMtuNegotiationState() {
+        mtuNegotiationAttempted = false
+        mtuNegotiationFailed = false
+        currentMtu = MTU_DEFAULT
+        logd("MTU协商状态已重置")
+    }
 
+    /**
+     * 开始PHY协商
+     */
+    private fun startPhyNegotiation(gatt: BluetoothGatt?) {
+        logd("=== 开始PHY协商流程 ===")
+        
+        // 检查设备PHY支持情况
+        val supportedPhys = phyManager.getSupportedPhys()
+        logd("设备支持的PHY: $supportedPhys")
+        
+        // 获取最优PHY配置
+        val optimalPhy = phyManager.getOptimalPhy()
+        logd("选择的最优PHY: ${phyManager.getPhyDescription(optimalPhy)}")
+        logd("PHY性能描述: ${phyManager.getPhyPerformanceDescription(optimalPhy)}")
+        
+        // 开始PHY协商，VTPhyManager内部处理所有重试和降级逻辑
+        phyManager.startPhyNegotiation(gatt, mBLEVTBLECallback)
+    }
+    
+
+    
+    /**
+     * 读取当前PHY
+     */
+    fun readCurrentPhy() {
+        if (mGatt != null) {
+            logd("=== 读取当前PHY ===")
+            phyManager.readPhy(mGatt, mBLEVTBLECallback)
+        } else {
+            logd("GATT未连接，无法读取PHY")
+        }
+    }
+    
+    /**
+     * 获取当前TX PHY
+     */
+    fun getCurrentTxPhy(): Int {
+        return phyManager.getCurrentTxPhy()
+    }
+    
+    /**
+     * 获取当前RX PHY
+     */
+    fun getCurrentRxPhy(): Int {
+        return phyManager.getCurrentRxPhy()
+    }
+    
+    /**
+     * 检查PHY协商是否成功
+     */
+    fun isPhyNegotiationSuccessful(): Boolean {
+        return phyManager.isPhyNegotiationSuccessful()
+    }
+    
+    /**
+     * 检查设备是否支持2M PHY
+     */
+    fun isLe2MPhySupported(): Boolean {
+        return phyManager.isLe2MPhySupported()
+    }
+    
+    /**
+     * 检查设备是否支持Coded PHY
+     */
+    fun isLeCodedPhySupported(): Boolean {
+        return phyManager.isLeCodedPhySupported()
+    }
+    
+    /**
+     * 获取设备支持的PHY列表
+     */
+    fun getSupportedPhys(): List<Int> {
+        return phyManager.getSupportedPhys()
+    }
+    
+    /**
+     * 获取PHY描述信息
+     */
+    fun getPhyDescription(phy: Int): String {
+        return phyManager.getPhyDescription(phy)
+    }
+    
+    /**
+     * 获取PHY性能描述
+     */
+    fun getPhyPerformanceDescription(phy: Int): String {
+        return phyManager.getPhyPerformanceDescription(phy)
+    }
+    
+    /**
+     * 获取连接质量信息
+     */
+    fun getConnectionQualityInfo(): String {
+        val mtuInfo = "MTU: ${getCurrentMtu()}字节"
+        val txPhyInfo = "TX PHY: ${getPhyDescription(getCurrentTxPhy())}"
+        val rxPhyInfo = "RX PHY: ${getPhyDescription(getCurrentRxPhy())}"
+        val mtuStatus = if (isMtuNegotiationSuccessful()) "✓" else "✗"
+        val phyStatus = if (isPhyNegotiationSuccessful()) "✓" else "✗"
+        
+        return "连接质量信息:\n" +
+               "  $mtuInfo $mtuStatus\n" +
+               "  $txPhyInfo $phyStatus\n" +
+               "  $rxPhyInfo $phyStatus"
+    }
+    
+    // ==================== 配对管理相关方法 ====================
+    
+    /**
+     * 检查并请求配对
+     */
+    private fun checkAndRequestBonding(device: BluetoothDevice) {
+        logd("=== 检查设备配对需求 ===")
+        logd("设备名称: ${device.name ?: "未知"}")
+        logd("设备地址: ${device.address}")
+        logd("当前配对状态: ${getBondStateDescription(device.bondState)}")
+        
+        // 使用DeviceManager检查是否需要配对
+        if (DeviceManager.shouldBondDevice(device)) {
+            logd("设备需要配对，开始配对流程")
+            requestBonding(device)
+        } else {
+            logd("设备暂不需要配对")
+        }
+    }
+    
+    /**
+     * 请求设备配对
+     */
+    private fun requestBonding(device: BluetoothDevice) {
+        if (isBonding) {
+            logd("配对已在进行中，忽略重复请求")
+            return
+        }
+        
+        if (device.bondState == BluetoothDevice.BOND_BONDED) {
+            logd("设备已配对，无需再次配对")
+            return
+        }
+        
+        logd("=== 开始设备配对 ===")
+        logd("设备名称: ${device.name ?: "未知"}")
+        logd("设备地址: ${device.address}")
+        
+        isBonding = true
+        bondingDevice = device
+        
+        // 创建配对
+        val bondResult = device.createBond()
+        logd("配对请求结果: $bondResult")
+        
+        if (!bondResult) {
+            logd("配对请求失败")
+            isBonding = false
+            bondingDevice = null
+        }
+    }
+    
+    /**
+     * 处理配对状态变化
+     */
+    private fun handleBondStateChange(device: BluetoothDevice?, bondState: Int) {
+        if (device == null) {
+            logd("配对状态变化：设备为空")
+            return
+        }
+        
+        logd("=== 配对状态变化 ===")
+        logd("设备名称: ${device.name ?: "未知"}")
+        logd("设备地址: ${device.address}")
+        logd("新配对状态: ${getBondStateDescription(bondState)}")
+        
+        when (bondState) {
+            BluetoothDevice.BOND_NONE -> {
+                logd("设备配对状态：未配对")
+                if (isBonding) {
+                    logd("配对失败或取消")
+                    isBonding = false
+                    bondingDevice = null
+                }
+            }
+            
+            BluetoothDevice.BOND_BONDING -> {
+                logd("设备配对状态：配对中")
+                isBonding = true
+                bondingDevice = device
+            }
+            
+            BluetoothDevice.BOND_BONDED -> {
+                logd("设备配对状态：已配对")
+                logd("=== 配对成功 ===")
+                isBonding = false
+                bondingDevice = null
+                
+                // 保存配对成功的设备信息
+                DeviceManager.saveConnectedDevice(device)
+                
+                // 通知回调
+                mBLEVTBLECallback.onBondingSuccess(device.name, device.address)
+            }
+        }
+    }
+    
+    /**
+     * 获取配对状态描述
+     */
+    private fun getBondStateDescription(bondState: Int): String {
+        return when (bondState) {
+            BluetoothDevice.BOND_NONE -> "未配对"
+            BluetoothDevice.BOND_BONDING -> "配对中"
+            BluetoothDevice.BOND_BONDED -> "已配对"
+            else -> "未知状态"
+        }
+    }
+    
+    /**
+     * 检查设备是否已配对
+     */
+    fun isDeviceBonded(device: BluetoothDevice): Boolean {
+        return device.bondState == BluetoothDevice.BOND_BONDED
+    }
+    
+    /**
+     * 检查当前设备是否已配对
+     */
+    fun isCurrentDeviceBonded(): Boolean {
+        val deviceAddress = getDeviceAddress()
+        if (deviceAddress.isNotEmpty()) {
+            val bluetoothAdapter = VTBluetoothUtil.getBluetoothAdapter(mContext)
+            bluetoothAdapter?.let { adapter ->
+                val device = adapter.getRemoteDevice(deviceAddress)
+                return isDeviceBonded(device)
+            }
+        }
+        return false
+    }
+    
+    /**
+     * 获取配对状态信息
+     */
+    fun getBondingStatusInfo(): String {
+        val deviceAddress = getDeviceAddress()
+        if (deviceAddress.isNotEmpty()) {
+            val bluetoothAdapter = VTBluetoothUtil.getBluetoothAdapter(mContext)
+            bluetoothAdapter?.let { adapter ->
+                val device = adapter.getRemoteDevice(deviceAddress)
+                val bondState = device.bondState
+                val bondDescription = getBondStateDescription(bondState)
+                val isCurrentlyBonding = isBonding && bondingDevice?.address == deviceAddress
+                
+                return "配对状态信息:\n" +
+                       "  设备: ${device.name ?: "未知"}\n" +
+                       "  地址: $deviceAddress\n" +
+                       "  状态: $bondDescription\n" +
+                       "  配对中: ${if (isCurrentlyBonding) "是" else "否"}"
+            }
+        }
+        return "配对状态信息: 无设备信息"
+    }
 }
-
-
-

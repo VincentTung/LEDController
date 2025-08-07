@@ -34,6 +34,9 @@ bool GIFCharacteristicCallbacks::gifIsHeaderReceived = false;
 unsigned long GIFCharacteristicCallbacks::gifLastReceiveTime = 0;
 bool GIFCharacteristicCallbacks::gifUseFileMode = false;
 
+// BLEHandler静态实例指针初始化
+BLEHandler* BLEHandler::instance = nullptr;
+
 // TextCharacteristicCallbacks 实现
 TextCharacteristicCallbacks::TextCharacteristicCallbacks(MatrixPanel_I2S_DMA* display, bool* gifFlag,
                                                        void (*textSizeFunc)(int), void (*displayFunc)(char*, bool)) {
@@ -365,6 +368,13 @@ void BrightnessCharacteristicCallbacks::onWrite(BLECharacteristic *pCharacterist
     int brightness = atoi(value.c_str());
     if (isValidBrightness(brightness)) {
         setLedBrightness(brightness);
+        
+        // 发送亮度值通知给客户端
+        char brightnessStr[8];
+        snprintf(brightnessStr, sizeof(brightnessStr), "%d", brightness);
+        pCharacteristic->setValue((uint8_t*)brightnessStr, strlen(brightnessStr));
+        pCharacteristic->notify();
+        BLE_DEBUG_PRINTF("****ble brightness notify:%s*****\n", brightnessStr);
     }
 }
 
@@ -423,7 +433,7 @@ void GIFCharacteristicCallbacks::onWrite(BLECharacteristic *pCharacteristic) {
                 DEBUG_PRINTLN("收到新的头信息包，重置之前的接收状态");
                 resetGIFReceive();
             }
-            // 头信息包现在也是512字节，但只需要前4字节的文件大小信息
+            // 头信息包现在也是510字节，但只需要前4字节的文件大小信息
             handleGIFHeader(v + 2, 4);
         } else if (packetType == 0x02) {  // 数据包
             DEBUG_PRINTF("收到GIF数据包，块索引: %d, 当前接收状态: gifIsReceiving=%d, gifIsHeaderReceived=%d\n", 
@@ -595,17 +605,23 @@ void GIFCharacteristicCallbacks::handleGIFHeader(uint8_t* data, int length) {
                 
                 // 切换到文件模式
                 gifDataBuffer = NULL;
+                gifUseFileMode = true;  // 明确设置为文件模式
             } else {
                 DEBUG_PRINTLN("内存碎片整理后分配成功");
+                gifUseFileMode = false;  // 确保设置为内存模式
             }
+        } else {
+            gifUseFileMode = false;  // 确保设置为内存模式
         }
     }
     
-    // 根据实际模式设置标志（大文件模式已在上面设置为true，小文件模式保持false）
+    // 根据实际模式设置标志
     DEBUG_PRINTF("GIF模式设置: 文件模式=%s\n", gifUseFileMode ? "是" : "否");
     
-    // 计算期望的数据块数
-    gifExpectedChunks = (gifExpectedBytes + 512 - 1) / 512;
+    // 计算期望的数据块数 - 使用动态MTU大小
+    // App端发送的数据块大小是 MTU-2，即 512-2 = 510字节
+    int chunkSize = 510;  // 与App端保持一致
+    gifExpectedChunks = (gifExpectedBytes + chunkSize - 1) / chunkSize;
     gifReceivedChunks = 0;
     gifReceivedBytes = 0;
     gifIsReceiving = true;
@@ -991,6 +1007,17 @@ MyBLEServerCallbacks::MyBLEServerCallbacks(MatrixPanel_I2S_DMA* display, void (*
 
 void MyBLEServerCallbacks::onConnect(BLEServer *pServer) {
     DEBUG_PRINTLN("设备连接");
+    
+    // 延迟发送当前亮度值，确保连接稳定
+    delay(100);
+    
+    // 获取当前亮度值并发送通知
+    // 使用全局变量currentBrightness获取当前亮度值
+    extern int currentBrightness;
+    int brightnessToSend = currentBrightness;
+    
+    // 通过BLEHandler发送当前亮度值
+    BLEHandler::sendCurrentBrightnessStatic(brightnessToSend);
 }
 
 void MyBLEServerCallbacks::onDisconnect(BLEServer *pServer) {
@@ -1024,6 +1051,9 @@ BLEHandler::BLEHandler(MatrixPanel_I2S_DMA* display, AnimatedGIF* gifDecoder,
     setRefreshRateFunc = refreshRateFunc;
     isScrollText = scrollFlag;
     isShowGIF = gifFlag;
+    
+    // 设置静态实例指针
+    instance = this;
 }
 
 void BLEHandler::init() {
@@ -1045,8 +1075,8 @@ void BLEHandler::init() {
     BLEDevice::init(BLE_DEVICE_NAME);
 
     // 设置BLE MTU大小
-    BLEDevice::setMTU(512);
-    DEBUG_PRINTF("BLE MTU设置为512字节\n");
+    BLEDevice::setMTU(BLE_MTU_SIZE);
+    DEBUG_PRINTF("BLE MTU设置为%d字节\n", BLE_MTU_SIZE);
     
     pServer = BLEDevice::createServer();
     pServer->setCallbacks(new MyBLEServerCallbacks(dma_display, setTextSizeFunc, displayTextFunc));
@@ -1096,6 +1126,7 @@ void BLEHandler::createCharacteristics() {
         BLE_CHARACTERISTIC_BRIGHTNESS_UUID,
         BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_NOTIFY);
     pCharacBrightness->setCallbacks(new BrightnessCharacteristicCallbacks(setLedBrightnessFunc));
+    pBrightnessCharacteristic = pCharacBrightness; // 保存亮度特征指针
     
     // // 刷新频率特征
     // BLECharacteristic *pCharacRefreshRate = pService->createCharacteristic(
@@ -1133,4 +1164,20 @@ void BLEHandler::startAdvertising() {
 void BLEHandler::stopAdvertising() {
     DEBUG_PRINTLN("停止BLE广播");
     pServer->getAdvertising()->stop();
+}
+
+void BLEHandler::sendCurrentBrightness(int brightness) {
+    if (pBrightnessCharacteristic != nullptr) {
+        char brightnessStr[8];
+        snprintf(brightnessStr, sizeof(brightnessStr), "%d", brightness);
+        pBrightnessCharacteristic->setValue((uint8_t*)brightnessStr, strlen(brightnessStr));
+        pBrightnessCharacteristic->notify();
+        BLE_DEBUG_PRINTF("****ble send current brightness:%s*****\n", brightnessStr);
+    }
+}
+
+void BLEHandler::sendCurrentBrightnessStatic(int brightness) {
+    if (instance != nullptr) {
+        instance->sendCurrentBrightness(brightness);
+    }
 }

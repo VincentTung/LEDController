@@ -1,13 +1,13 @@
 package com.vincent.android.myled.led
 
 import VTBLECallback
+import android.bluetooth.BluetoothDevice
 import android.content.Context
 import com.vincent.android.myled.ble.VTBLEController
+import com.vincent.android.myled.ble.VTBluetoothUtil
 import com.vincent.android.myled.utils.LED_CHARACTERISTIC_BRIGHTNESS_UUID
 import com.vincent.android.myled.utils.LED_CHARACTERISTIC_DRAW_NORMAL_UUID
 import com.vincent.android.myled.utils.LED_CHARACTERISTIC_FILL_PIXEL_UUID
-import com.vincent.android.myled.utils.BLE_CHUNK_SIZE
-import com.vincent.android.myled.utils.BLE_MTU_SIZE
 import com.vincent.android.myled.utils.LED_CHARACTERISTIC_FILL_SCREEN_UUID
 import com.vincent.android.myled.utils.LED_CHARACTERISTIC_GIF_UUID
 import com.vincent.android.myled.utils.LED_CHARACTERISTIC_TEXT_SCROLL_UUID
@@ -89,11 +89,7 @@ class LEDController private constructor() {
         }
         
         connectionState = ConnectionState.CONNECTING
-        
-        logd("=== 开始智能连接模式 ===")
-        logd("VTBLEController将自动选择最佳连接方式")
-        
-        // 使用VTBLEController的智能连接方法
+
         mBLEController.connect(object : VTBLECallback by callback {
             override fun onConnected(name: String?, address: String?) {
                 connectionState = ConnectionState.CONNECTED
@@ -101,11 +97,11 @@ class LEDController private constructor() {
                 logd("设备名称: ${name ?: "未知"}")
                 logd("设备地址: ${address ?: "未知"}")
                 
-                // 保存连接成功的设备信息到DeviceManager
-                if (address != null) {
-                    DeviceManager.saveConnectedDevice(name, address)
-                    logd("设备信息已保存到DeviceManager")
-                }
+                                        // 保存连接成功的设备信息到DeviceManager
+                        if (address != null) {
+                            // 注意：这里不再直接保存，因为VTBLEController会处理配对和保存
+                            logd("设备连接成功，配对状态将由VTBLEController管理")
+                        }
                 
                 callback.onConnected(name, address)
             }
@@ -121,6 +117,72 @@ class LEDController private constructor() {
                 logd("=== 连接失败 ===")
                 logd("所有连接方式都已尝试失败")
                 callback.onScanFailed()
+            }
+            
+            // MTU协商相关回调
+            override fun onMtuNegotiationSuccess(mtu: Int) {
+                logd("=== LEDController: MTU协商成功 ===")
+                logd("协商后的MTU大小: $mtu 字节")
+                callback.onMtuNegotiationSuccess(mtu)
+            }
+            
+            override fun onMtuNegotiationFailed(requestedMtu: Int, actualMtu: Int) {
+                logd("=== LEDController: MTU协商失败 ===")
+                logd("请求的MTU大小: $requestedMtu 字节")
+                logd("实际使用的MTU大小: $actualMtu 字节")
+                callback.onMtuNegotiationFailed(requestedMtu, actualMtu)
+            }
+            
+            // PHY协商相关回调
+            override fun onPhyNegotiationSuccess(txPhy: Int, rxPhy: Int) {
+                logd("=== LEDController: PHY协商成功 ===")
+                logd("TX PHY: $txPhy, RX PHY: $rxPhy")
+                callback.onPhyNegotiationSuccess(txPhy, rxPhy)
+            }
+            
+            override fun onPhyNegotiationFailed(requestedPhy: Int, actualPhy: Int) {
+                logd("=== LEDController: PHY协商失败 ===")
+                logd("请求的PHY: $requestedPhy")
+                logd("实际的PHY: $actualPhy")
+                callback.onPhyNegotiationFailed(requestedPhy, actualPhy)
+            }
+            
+            override fun onPhyReadSuccess(txPhy: Int, rxPhy: Int) {
+                logd("=== LEDController: PHY读取成功 ===")
+                logd("TX PHY: $txPhy, RX PHY: $rxPhy")
+                callback.onPhyReadSuccess(txPhy, rxPhy)
+            }
+            
+            override fun onPhyReadFailed() {
+                logd("=== LEDController: PHY读取失败 ===")
+                callback.onPhyReadFailed()
+            }
+            
+            override fun onPhyUpdateSuccess(txPhy: Int, rxPhy: Int) {
+                logd("=== LEDController: PHY更新成功 ===")
+                logd("新的TX PHY: $txPhy, 新的RX PHY: $rxPhy")
+                callback.onPhyUpdateSuccess(txPhy, rxPhy)
+            }
+            
+            override fun onPhyUpdateFailed() {
+                logd("=== LEDController: PHY更新失败 ===")
+                callback.onPhyUpdateFailed()
+            }
+            
+            // 配对相关回调
+            override fun onBondingSuccess(name: String?, address: String?) {
+                logd("=== LEDController: 配对成功 ===")
+                logd("设备名称: ${name ?: "未知"}")
+                logd("设备地址: ${address ?: "未知"}")
+                logd("设备配对成功，连接稳定性将得到提升")
+                callback.onBondingSuccess(name, address)
+            }
+            
+            // 亮度通知回调
+            override fun onBrightnessReceived(brightness: Int) {
+                logd("=== LEDController: 收到亮度通知 ===")
+                logd("当前亮度值: $brightness")
+                callback.onBrightnessReceived(brightness)
             }
         })
     }
@@ -206,30 +268,39 @@ class LEDController private constructor() {
             return
         }
 
-        // 发送数据头信息：总大小,分块数量
-        val totalSize = byteArray.size
-        val chunkSize = 20 // BLE MTU限制
-        val chunkCount = (totalSize + chunkSize - 1) / chunkSize // 向上取整
-        
-        val header = "$totalSize,$chunkCount"
-        logd("发送图像数据头: $header, 总大小: $totalSize, 分块数: $chunkCount")
-        
-        // 先发送头信息
-        mBLEController.sendText(
-            LED_SERVICE_UUID,
-            LED_CHARACTERISTIC_DRAW_NORMAL_UUID,
-            header
-        )
-        
-        // 延迟一下确保头信息被处理
-        Thread.sleep(100)
-        
-        // 然后发送图像数据
-        mBLEController.sendBytes(
-            LED_SERVICE_UUID,
-            LED_CHARACTERISTIC_DRAW_NORMAL_UUID,
-            byteArray
-        )
+        // 使用协程异步发送，避免阻塞主线程
+        CoroutineUtil.getScope("LEDController").launch {
+            try {
+                // 发送数据头信息：总大小,分块数量
+                val totalSize = byteArray.size
+                val chunkSize = 20 // BLE MTU限制
+                val chunkCount = (totalSize + chunkSize - 1) / chunkSize // 向上取整
+                
+                val header = "$totalSize,$chunkCount"
+                logd("发送图像数据头: $header, 总大小: $totalSize, 分块数: $chunkCount")
+                
+                // 先发送头信息
+                mBLEController.sendText(
+                    LED_SERVICE_UUID,
+                    LED_CHARACTERISTIC_DRAW_NORMAL_UUID,
+                    header
+                )
+                
+                // 使用协程delay替代Thread.sleep，确保头信息被处理
+                delay(100)
+                
+                // 然后发送图像数据
+                mBLEController.sendBytes(
+                    LED_SERVICE_UUID,
+                    LED_CHARACTERISTIC_DRAW_NORMAL_UUID,
+                    byteArray
+                )
+                
+                logd("图像数据发送完成")
+            } catch (e: Exception) {
+                logd("发送图像数据时发生错误: ${e.message}")
+            }
+        }
     }
 
     /**
@@ -240,7 +311,7 @@ class LEDController private constructor() {
             logd("Device not connected, cannot set brightness")
             return
         }
-        
+        logd("setBrightness : $value")
         val brightness: Int = (255 / 100.0f * value).toInt()
         val finalBrightness = if (brightness == 0) LED_MINIMUM_BRIGHTNESS else brightness
         
@@ -336,7 +407,7 @@ class LEDController private constructor() {
         }
         
         // 检查文件大小限制
-        val maxSize = BLE_MTU_SIZE * 1024  // 使用MTU大小作为KB单位
+        val maxSize = mBLEController.getCurrentMtu() * 1024  // 使用动态MTU大小作为KB单位
         if (gifBytes.size > maxSize) {
             logd("GIF文件过大: ${gifBytes.size} 字节，最大支持: $maxSize 字节")
             callback?.invoke(false, "GIF文件过大")
@@ -349,8 +420,9 @@ class LEDController private constructor() {
         CoroutineUtil.getScope("LEDController").launch {
             try {
                 // 发送头信息包 (包类型: 0x01, 块索引: 0x00, 数据: 4字节文件大小)
-                // 填充到512字节以确保与数据包大小一致
-                val headerData = ByteArray(BLE_CHUNK_SIZE)
+                // 使用动态MTU大小
+                val currentMtu = mBLEController.getCurrentMtu()
+                val headerData = ByteArray(currentMtu)
                 headerData[0] = 0x01  // 包类型：头信息
                 headerData[1] = 0x00  // 块索引
                 headerData[2] = (gifBytes.size shr 24).toByte()  // 文件大小高字节
@@ -358,7 +430,7 @@ class LEDController private constructor() {
                 headerData[4] = (gifBytes.size shr 8).toByte()
                 headerData[5] = gifBytes.size.toByte()  // 文件大小低字节
                 // 其余字节填充为0
-                for (i in 6 until BLE_CHUNK_SIZE) {
+                for (i in 6 until currentMtu) {
                     headerData[i] = 0x00
                 }
                 
@@ -383,7 +455,7 @@ class LEDController private constructor() {
                         break
                     } else {
                         logd("头信息包发送失败 (重试 $retry/3)")
-                        // 增加重试延迟
+                        // 使用协程delay替代Thread.sleep，增加重试延迟
                         delay(100L * (retry + 1))
                     }
                 }
@@ -395,13 +467,12 @@ class LEDController private constructor() {
                 }
 
                 logd("头信息包发送成功，等待ESP32处理...")
-                // 增加延迟，确保ESP32有足够时间处理头信息包
                 delay(500)
                 
                 // 分块发送GIF数据
-                // 使用实际的BLE_CHUNK_SIZE，减去2字节包头
-                val chunkSize = BLE_CHUNK_SIZE - 2  // BLE数据块大小
-                logd("使用数据块大小: $chunkSize 字节 (总块大小: $BLE_CHUNK_SIZE - 2字节包头)")
+                // 使用动态MTU大小，减去2字节包头
+                val chunkSize = currentMtu - 2  // BLE数据块大小
+                logd("使用数据块大小: $chunkSize 字节 (总块大小: $currentMtu - 2字节包头)")
                 var chunkIndex = 0
                 var successCount = 0
                 var failCount = 0
@@ -435,7 +506,7 @@ class LEDController private constructor() {
                             chunkSent = true
                             break
                         } else {
-                            // 短暂延迟后重试
+                            // 使用协程delay替代Thread.sleep，短暂延迟后重试
                             delay(50)
                         }
                     }
@@ -449,7 +520,6 @@ class LEDController private constructor() {
 
                     chunkIndex++
 
-                    // 增加延迟，确保数据包按顺序到达
                     delay(30)
 
                     // 每发送20个包，额外等待一下
@@ -485,10 +555,139 @@ class LEDController private constructor() {
 
     fun drawDefault() {
         drawStaticText(LED_DEFAULT_DISPLAY_TEXT)
-        setBrightness(LED_DEFAULT_BRIGHTNESS)
+
     }
 
     fun stopSendGifBytes() {
         CoroutineUtil.getScope("LEDController").cancel()
+    }
+    
+    /**
+     * 读取当前PHY
+     */
+    fun readCurrentPhy() {
+        if (mBLEController.isConnected()) {
+            mBLEController.readCurrentPhy()
+        } else {
+            logd("设备未连接，无法读取PHY")
+        }
+    }
+    
+    /**
+     * 获取当前TX PHY
+     */
+    fun getCurrentTxPhy(): Int {
+        return mBLEController.getCurrentTxPhy()
+    }
+    
+    /**
+     * 获取当前RX PHY
+     */
+    fun getCurrentRxPhy(): Int {
+        return mBLEController.getCurrentRxPhy()
+    }
+    
+    /**
+     * 检查PHY协商是否成功
+     */
+    fun isPhyNegotiationSuccessful(): Boolean {
+        return mBLEController.isPhyNegotiationSuccessful()
+    }
+    
+    /**
+     * 检查设备是否支持2M PHY
+     */
+    fun isLe2MPhySupported(): Boolean {
+        return mBLEController.isLe2MPhySupported()
+    }
+    
+    /**
+     * 检查设备是否支持Coded PHY
+     */
+    fun isLeCodedPhySupported(): Boolean {
+        return mBLEController.isLeCodedPhySupported()
+    }
+    
+    /**
+     * 获取设备支持的PHY列表
+     */
+    fun getSupportedPhys(): List<Int> {
+        return mBLEController.getSupportedPhys()
+    }
+    
+    /**
+     * 获取PHY描述信息
+     */
+    fun getPhyDescription(phy: Int): String {
+        return mBLEController.getPhyDescription(phy)
+    }
+    
+    /**
+     * 获取PHY性能描述
+     */
+    fun getPhyPerformanceDescription(phy: Int): String {
+        return mBLEController.getPhyPerformanceDescription(phy)
+    }
+    
+    /**
+     * 获取连接质量信息
+     */
+    fun getConnectionQualityInfo(): String {
+        return mBLEController.getConnectionQualityInfo()
+    }
+    
+    // ==================== 配对管理相关方法 ====================
+    
+    /**
+     * 检查当前设备是否已配对
+     */
+    fun isCurrentDeviceBonded(): Boolean {
+        return mBLEController.isCurrentDeviceBonded()
+    }
+    
+    /**
+     * 获取配对状态信息
+     */
+    fun getBondingStatusInfo(): String {
+        return mBLEController.getBondingStatusInfo()
+    }
+    
+    /**
+     * 获取设备信息摘要
+     */
+    fun getDeviceInfoSummary(): String {
+        return DeviceManager.getDeviceInfoSummary()
+    }
+    
+    /**
+     * 手动请求配对（如果需要）
+     */
+    fun requestBonding() {
+        if (mBLEController.isConnected()) {
+            val deviceAddress = mBLEController.getDeviceAddress()
+            if (deviceAddress.isNotEmpty()) {
+                val bluetoothAdapter = VTBluetoothUtil.getBluetoothAdapter(mContext)
+                val device = bluetoothAdapter?.getRemoteDevice(deviceAddress)
+                
+                if (device?.bondState != BluetoothDevice.BOND_BONDED) {
+                    logd("=== 手动请求配对 ===")
+                    logd("设备名称: ${device?.name ?: "未知"}")
+                    logd("设备地址: $deviceAddress")
+                    
+                    val bondResult = device?.createBond()
+                    logd("配对请求结果: $bondResult")
+                    
+                    if (bondResult == true) {
+                        logd("配对请求已发送，等待用户确认")
+                    } else {
+                        logd("配对请求失败")
+                    }
+                } else {
+                    logd("设备已配对，无需再次配对")
+                }
+            }
+        } else {
+            logd("设备未连接，无法请求配对")
+        }
     }
 }

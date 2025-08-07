@@ -9,10 +9,6 @@ class MyLEDApp: Application() {
 
     override fun onCreate() {
         super.onCreate()
-        
-        // 初始化MMKV
-        MMKV.initialize(this)
-        
         // 初始化配置管理器
         ConfigManager.init(this)
         

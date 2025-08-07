@@ -30,5 +30,31 @@
     <string name="gif_send_failed">GIF发送失败</string>
     <string name="gif_file_too_large">GIF文件过大</string>
     <string name="gif_file_read_failed">读取GIF文件失败</string>
+    
+    <!-- MTU协商相关 -->
+    <string name="mtu_negotiation_success_optimal">MTU协商成功：%1$d字节（最佳传输效率）</string>
+    <string name="mtu_negotiation_success_good">MTU协商成功：%1$d字节（良好传输效率）</string>
+    <string name="mtu_negotiation_success_normal">MTU协商成功：%1$d字节（一般传输效率）</string>
+    <string name="mtu_negotiation_success_slow">MTU协商成功：%1$d字节（传输可能较慢）</string>
+    <string name="mtu_negotiation_failed">MTU协商失败，将使用默认大小：%1$d字节</string>
+    
+    <!-- PHY协商相关 -->
+    <string name="phy_negotiation_success_2m">PHY协商成功：2M PHY（数据传输速度翻倍）</string>
+    <string name="phy_negotiation_success_coded">PHY协商成功：Coded PHY（长距离传输，抗干扰强）</string>
+    <string name="phy_negotiation_success_1m">PHY协商成功：1M PHY（标准性能，兼容性最好）</string>
+    <string name="phy_negotiation_failed">PHY协商失败，将使用默认PHY</string>
+    <string name="phy_read_success">PHY读取成功：TX %1$s, RX %2$s</string>
+    <string name="phy_read_failed">PHY读取失败</string>
+    <string name="phy_update_success">PHY更新成功：TX %1$s, RX %2$s</string>
+    <string name="phy_update_failed">PHY更新失败</string>
+    <string name="phy_not_supported">当前设备不支持PHY协商</string>
+    <string name="connection_quality_info">连接质量信息</string>
+    
+    <!-- 配对相关 -->
+    <string name="bonding_success">设备配对成功，连接稳定性已提升</string>
+    <string name="bonding_failed">设备配对失败</string>
+    <string name="bonding_in_progress">设备配对中，请稍候</string>
+    <string name="bonding_not_needed">设备暂不需要配对</string>
+    <string name="bonding_already_paired">设备已配对</string>
 
 </resources>

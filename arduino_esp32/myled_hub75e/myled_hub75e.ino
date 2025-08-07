@@ -356,8 +356,13 @@ uint16_t colorWhite;
 uint16_t colorRed;
 uint16_t colorGreen;
 uint16_t colorBlue;
+
+// 当前亮度值
+int currentBrightness = LED_DEFAULT_BRIGHTNAESS;
+
 //// range is 0-255, 0 - 0%, 255 - 100%
 void setLedBrightness(int value) {
+  currentBrightness = value;
   dma_display->setBrightness8(value);
 }
 char *scrollTextContent = nullptr;

@@ -81,7 +81,7 @@
 
 // 图像数据接收配置
 #define MAX_IMAGE_SIZE 4096            // 最大图像数据大小 (字节)
-#define BLE_CHUNK_SIZE 512             // BLE数据块大小，与App端保持一致
+#define BLE_CHUNK_SIZE 510             // BLE数据块大小，与App端保持一致（MTU-2）
 #define BLE_MTU_SIZE 512               // BLE MTU大小，与App端保持一致
 #define RECEIVE_TIMEOUT 3000           // 接收超时时间 (ms)
 #define HEADER_BUFFER_SIZE 50          // 头信息缓冲区大小
