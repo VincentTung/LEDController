@@ -2,6 +2,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <esp_heap_caps.h>
+#include "debug.h"
 
 // ============================================================================
 // StringUtils 实现
@@ -152,7 +153,7 @@ void DebugUtils::printDisplayState(DisplayState state) {
         "DRAWING"
     };
     
-    if (state >= 0 && state < ARRAY_SIZE(stateNames)) {
+    if (state >= 0 && state < (sizeof(stateNames) / sizeof(stateNames[0]))) {
         DEBUG_PRINTF("Display State: %s\n", stateNames[state]);
     } else {
         DEBUG_PRINTF("Display State: UNKNOWN (%d)\n", state);
