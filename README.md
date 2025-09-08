@@ -103,23 +103,15 @@ LEDController/
 
 ### 硬件连接
 ```
-ESP32    →    HUB75E LED矩阵
-3.3V     →    VCC
-GND      →    GND
-GPIO 2   →    A
-GPIO 4   →    B
-GPIO 16  →    C
-GPIO 17  →    D
-GPIO 5   →    E
-GPIO 18  →    LAT
-GPIO 23  →    OE
-GPIO 19  →    CLK
-GPIO 22  →    R1
-GPIO 21  →    G1
-GPIO 25  →    B1
-GPIO 26  →    R2
-GPIO 27  →    G2
-GPIO 14  →    B2
+esp32和hub75e屏幕
+R1 -> 25       G1-> 26
+B1 -> 27       GND-->GND
+R2 ->14       G2->12
+B2  ->13      E-> 32
+A   ->23       B-> 22
+C  -> 5         D->17
+CLK-> 16     LAT->4
+OE-> 15     GND->GND
 ```
 
 ### 固件烧录
