@@ -79,6 +79,9 @@ LEDController/
 │       ├── myled_hub75e.ino   # 主程序
 │       ├── config.h           # 配置文件
 │       └── *.cpp/*.h          # 功能模块
+├── archives/             
+│   └── app-release.apk        #android apk
+│   ├── myled_hub75e.ino       #esp32 固件
 ├── art/                       # 项目图片
 │   ├── app_main.png          # 应用主界面
 │   ├── app_paint.png         # 绘图界面
