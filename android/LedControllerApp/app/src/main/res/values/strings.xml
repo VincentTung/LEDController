@@ -1,0 +1,163 @@
+<resources>
+    <string name="app_name">LEDController</string>
+    <string name="find_no_device">未发现LED</string>
+    <string name="connected">连接成功！</string>
+    <string name="disconnected">断开连接！</string>
+    <string name="connecting">连接中...</string>
+    <string name="discover_services">发现服务开始</string>
+    <string name="subscribe_success">订阅成功</string>
+    <string name="require_permission_failed">获取权限失败</string>
+    <string name="device_not_support_bluetooth">设备不支持蓝牙</string>
+    <string name="turn_on_failed">打开失败</string>
+    <string name="draw_a_picture">涂鸦</string>
+    <string name="send">发送</string>
+    <string name="hint_scroll_text">输入滚动文字</string>
+    <string name="hint_static_text">输入要显示的文字...</string>
+    <string name="brightness">亮度</string>
+    <string name="static_text">静态文字显示</string>
+    <string name="scroll_text">滚动文本显示</string>
+    <string name="write_failed">写入失败</string>
+    <string name="write_success">写入成功</string>
+    <string name="static_text_size">文字大小</string>
+    <string name="scroll_speed">滚动速度</string>
+    <string name="gif">素材库</string>
+    <string name="reconnecting_saved_device">正在重连已保存的设备...</string>
+    <string name="no_saved_device">未找到已保存的设备，将扫描新设备...</string>
+    <string name="cleared_saved_device">已清除保存的设备信息</string>
+    <string name="device_already_connected">设备已连接</string>
+    <string name="sending_gif">正在发送GIF文件...</string>
+    <string name="gif_send_success">GIF发送成功</string>
+    <string name="gif_send_failed">GIF发送失败</string>
+    <string name="gif_file_too_large">GIF文件过大</string>
+    <string name="gif_file_read_failed">读取GIF文件失败</string>
+    
+    <!-- MTU协商相关 -->
+    <string name="mtu_negotiation_success_optimal">MTU协商成功：%1$d字节（最佳传输效率）</string>
+    <string name="mtu_negotiation_success_good">MTU协商成功：%1$d字节（良好传输效率）</string>
+    <string name="mtu_negotiation_success_normal">MTU协商成功：%1$d字节（一般传输效率）</string>
+    <string name="mtu_negotiation_success_slow">MTU协商成功：%1$d字节（传输可能较慢）</string>
+    <string name="mtu_negotiation_failed">MTU协商失败，将使用默认大小：%1$d字节</string>
+    
+    <!-- PHY协商相关 -->
+    <string name="phy_negotiation_success_2m">PHY协商成功：2M PHY（数据传输速度翻倍）</string>
+    <string name="phy_negotiation_success_coded">PHY协商成功：Coded PHY（长距离传输，抗干扰强）</string>
+    <string name="phy_negotiation_success_1m">PHY协商成功：1M PHY（标准性能，兼容性最好）</string>
+    <string name="phy_negotiation_failed">PHY协商失败，将使用默认PHY</string>
+    <string name="phy_read_success">PHY读取成功：TX %1$s, RX %2$s</string>
+    <string name="phy_read_failed">PHY读取失败</string>
+    <string name="phy_update_success">PHY更新成功：TX %1$s, RX %2$s</string>
+    <string name="phy_update_failed">PHY更新失败</string>
+    <string name="phy_negotiation_not_supported">当前设备不支持PHY协商</string>
+    <string name="connection_quality_info">连接质量信息</string>
+    
+    <!-- 配对相关 -->
+    <string name="bonding_success">设备配对成功，连接稳定性已提升</string>
+    <string name="bonding_failed">设备配对失败</string>
+    <string name="bonding_in_progress">设备配对中，请稍候</string>
+    <string name="bonding_not_needed">设备暂不需要配对</string>
+    <string name="bonding_already_paired">设备已配对</string>
+    
+    <!-- 计时游戏相关 -->
+    <string name="timer_game">计时游戏</string>
+    <string name="start_timer_game">计时游戏</string>
+    <string name="timer_game_ready">准备开始游戏</string>
+    <string name="timer_game_running">游戏进行中...</string>
+    <string name="timer_game_win">恭喜获胜！</string>
+    <string name="timer_game_lose">失败！</string>
+    <string name="timer_game_target_time">目标时间</string>
+    <string name="timer_game_current_time">当前计时</string>
+    <string name="timer_game_win_count">胜利次数</string>
+    <string name="timer_game_lose_count">失败次数</string>
+    <string name="timer_game_rule">数字计时游戏\n\n规则：LED屏幕会随机显示一个目标时间（如09:35），\n按下开始按钮后LED开始计时，\n当计时到达目标时间时按下停止按钮即可获胜！</string>
+    
+    <!-- MainActivity硬编码字符串 -->
+    <string name="connecting_device">连接中...</string>
+    <string name="select_image">选择图片</string>
+    <string name="device_not_connected">请先连接LED设备</string>
+    <string name="image_type">image/*</string>
+    <string name="gif_mime_type">image/gif</string>
+    <string name="clock_enabled">时钟显示已启用</string>
+    <string name="clock_disabled">时钟显示已禁用</string>
+    <string name="device_not_connected_short">设备未连接</string>
+    
+    <!-- PHY描述 -->
+    <string name="phy_1m">1M PHY</string>
+    <string name="phy_2m">2M PHY</string>
+    <string name="phy_coded">Coded PHY</string>
+    <string name="phy_unknown">Unknown PHY (%1$d)</string>
+    
+    <!-- 图片处理相关 -->
+    <string name="image_read_failed">无法读取图片文件</string>
+    <string name="image_process_error">处理图片时出错: %1$s</string>
+    <string name="gif_process_error">处理GIF文件时出错: %1$s</string>
+    <string name="gif_read_failed">无法读取GIF文件</string>
+    <string name="image_send_success">图片发送成功</string>
+    <string name="image_send_failed">图片发送失败</string>
+    <string name="gif_send_success_default">GIF发送成功</string>
+    <string name="gif_send_failed_default">GIF发送失败</string>
+    
+    <!-- 文本控制相关 -->
+    <string name="text_size_tiny">极小</string>
+    <string name="text_size_small">小</string>
+    <string name="text_size_medium">中</string>
+    <string name="text_size_large">大</string>
+    <string name="scroll_speed_slow">慢</string>
+    <string name="scroll_speed_medium">中</string>
+    <string name="scroll_speed_fast">快</string>
+    <string name="static_text_sent">静态文字已发送</string>
+    <string name="scroll_text_sent">滚动文字已发送</string>
+    <string name="please_enter_text">请输入文字内容</string>
+    <string name="text_sent">文字已发送</string>
+    <string name="text">文字</string>
+    
+    <!-- TimerGameActivity相关字符串 -->
+    <string name="timer_game_start">开始游戏</string>
+    <string name="timer_game_stop">停止计时</string>
+    <string name="timer_game_restart">重新开始</string>
+    
+    <!-- DialogManager相关字符串 -->
+    <string name="phy_info_title">PHY连接信息</string>
+    <string name="phy_info_content">=== PHY连接信息 ===\n\n设备PHY支持:\n- 2M PHY: %1$s\n- Coded PHY: %2$s\n- 支持的PHY: %3$s\n\n%4$s</string>
+    <string name="phy_supported">✓</string>
+    <string name="phy_not_supported">✗</string>
+    <string name="phy_negotiation_success">✓ 成功</string>
+    <string name="phy_negotiation_status_failed">✗ 失败</string>
+    <string name="device_not_connected_phy">设备未连接，无法获取PHY信息</string>
+    <string name="test_phy">测试PHY</string>
+    <string name="reading_phy_info">正在读取PHY信息...</string>
+    <string name="bonding_info_title">设备配对信息</string>
+    <string name="bonding_info_content">=== 设备配对信息 ===\n\n%1$s\n\n%2$s</string>
+    <string name="device_not_connected_bonding">设备未连接，无法获取配对状态</string>
+    <string name="request_bonding">请求配对</string>
+    <string name="requesting_bonding">正在请求配对...</string>
+    <string name="clear_device">清除设备</string>
+    <string name="device_cleared">已清除保存的设备信息</string>
+    
+    <string name="progress_dialog_title">发送图片</string>
+    <string name="progress_dialog_message">正在发送图片... %1$d%%</string>
+    <string name="stop_sending">停止发送</string>
+    <string name="sending_stopped">发送已停止</string>
+    
+    <string name="settings_title">设置</string>
+    <string name="settings_clear_device">清除保存的设备</string>
+    <string name="settings_phy_info">PHY信息</string>
+    <string name="settings_about">关于应用</string>
+    <string name="cancel">取消</string>
+    <string name="ok">确定</string>
+    
+    <string name="about_title">关于应用</string>
+    <string name="about_content">LED控制器 v1.0\n\n功能特性：\n• 蓝牙连接LED屏幕\n• 文本显示（静态/滚动）\n• 图片和GIF显示\n• 时钟显示\n• 计时游戏\n\n开发者：Vincent</string>
+    
+    <!-- GIFListActivity相关字符串 -->
+    <string name="gif_no_files_found">未找到GIF文件</string>
+    <string name="gif_please_select_first">请先选择一个GIF文件</string>
+    <string name="gif_sending_title">发送GIF</string>
+    <string name="gif_sending_progress">正在发送GIF文件... %1$d%%</string>
+    <string name="gif_stop_sending">停止发送</string>
+    <string name="gif_sending_stopped">发送已停止</string>
+    
+
+
+
+
+</resources>

@@ -11,57 +11,92 @@
 // 前向声明
 class MatrixPanel_I2S_DMA;
 class AnimatedGIF;
+class ClockManager;
+
+// ============================================================================
+// PSRAM支持函数声明
+// ============================================================================
+
+/**
+ * 检查PSRAM是否可用
+ * @return true if PSRAM is available, false otherwise
+ */
+bool isPSRAMAvailable();
+
+/**
+ * 获取PSRAM大小
+ * @return PSRAM size in bytes, 0 if not available
+ */
+size_t getPSRAMSize();
+
+/**
+ * 在PSRAM中分配内存
+ * @param size 要分配的内存大小
+ * @return 分配的内存指针，失败返回NULL
+ */
+void* psram_malloc(size_t size);
+
+/**
+ * 释放PSRAM内存
+ * @param ptr 要释放的内存指针
+ */
+void psram_free(void* ptr);
+
+/**
+ * 检查指针是否在PSRAM地址范围内
+ * @param ptr 要检查的指针
+ * @return true if pointer is in PSRAM range, false otherwise
+ */
+bool isPSRAMPointer(void* ptr);
+
+// ============================================================================
+// 内存优化和清理函数声明
+// ============================================================================
+
+/**
+ * 为GIF显示优化内存（激进清理，确保有足够内存）
+ */
+void optimizeMemoryForGIF();
+
+/**
+ * 激进的内存清理函数，专门用于GIF显示前
+ */
+void aggressiveMemoryCleanupForGIF();
+
+/**
+ * 内存碎片整理
+ */
+void defragmentMemory();
+
+/**
+ * 检查是否有足够内存显示GIF
+ * @param requiredSize 需要的内存大小
+ * @return true if enough memory available, false otherwise
+ */
+bool checkMemoryForGIF(size_t requiredSize);
 
 // ============================================================================
 // BLE回调类声明
 // ============================================================================
 
 /**
- * 静态文本特征值回调
+ * 通用控制特征值回调 
  */
-class TextCharacteristicCallbacks : public BLECharacteristicCallbacks {
-private:
-    MatrixPanel_I2S_DMA* dma_display;
-    bool* isShowGIF;
-    void (*setTextSize)(int);
-    void (*displayText)(char*, bool);
-    
-public:
-    TextCharacteristicCallbacks(MatrixPanel_I2S_DMA* display, bool* gifFlag, 
-                               void (*textSizeFunc)(int), void (*displayFunc)(char*, bool));
-    void onWrite(BLECharacteristic *pCharacteristic);
-};
-
-/**
- * 滚动文本特征值回调
- */
-class TextScrollCharacteristicCallbacks : public BLECharacteristicCallbacks {
-private:
-    MatrixPanel_I2S_DMA* dma_display;
-    bool* isShowGIF;
-    void (*setTextSize)(int);
-    void (*setTextScrollSpeed)(int);
-    void (*displayText)(char*, bool);
-    
-public:
-    TextScrollCharacteristicCallbacks(MatrixPanel_I2S_DMA* display, bool* gifFlag,
-                                     void (*textSizeFunc)(int), void (*scrollSpeedFunc)(int),
-                                     void (*displayFunc)(char*, bool));
-    void onWrite(BLECharacteristic *pCharacteristic);
-};
-
-/**
- * 图像绘制特征值回调
- */
-class DrawNormalCharacteristicCallbacks : public BLECharacteristicCallbacks {
+class ControlCharacteristicCallbacks : public BLECharacteristicCallbacks {
 private:
     MatrixPanel_I2S_DMA* dma_display;
     bool* isScrollText;
     bool* isShowGIF;
+    void (*setTextSize)(int);
+    void (*setTextScrollSpeed)(int);
+    void (*displayText)(char*, bool);
     void (*freeScrollText)();
     void (*clear)();
+    void (*setLedBrightness)(int);
+    void (*setRefreshRate)(int);
+    void (*setClockMode)(bool);
     
-    // 静态成员变量用于数据接收
+    // 静态成员变量用于图像数据接收
     static uint8_t* dataBuffer;
     static int receivedBytes;
     static int expectedBytes;
@@ -72,43 +107,40 @@ private:
     static unsigned long lastReceiveTime;
     
 public:
-        DrawNormalCharacteristicCallbacks(MatrixPanel_I2S_DMA* display, bool* scrollFlag,
-                                    void (*freeTextFunc)(), void (*clearFunc)(), bool* gifFlag);
+    ControlCharacteristicCallbacks(MatrixPanel_I2S_DMA* display, bool* scrollFlag, bool* gifFlag,
+                                  void (*textSizeFunc)(int), void (*scrollSpeedFunc)(int),
+                                  void (*displayFunc)(char*, bool), void (*freeTextFunc)(),
+                                  void (*clearFunc)(), void (*brightnessFunc)(int),
+                                  void (*refreshRateFunc)(int), void (*clockModeFunc)(bool));
     void onWrite(BLECharacteristic *pCharacteristic);
     
     static void checkTimeout();
     
+    // 更新计时游戏显示
+    void updateTimerGameDisplay();
+    
 private:
-    void handleHeader(uint8_t* data, int length);
-    void handleDataChunk(uint8_t* data, int length);
+    void handleTextCommand(std::string value);
+    void handleScrollTextCommand(std::string value);
+    void handleImageCommand(uint8_t* data, int length);
+    void handleImageCommand(std::string value);
+    void handleBrightnessCommand(std::string value);
+    void handleClockCommand(std::string value);
+    void handleFillScreenCommand(std::string value);
+    void handleFillPixelCommand(std::string value);
+    void handleRefreshRateCommand(std::string value);
+    void handleTimerGameCommand(std::string value);
+    void handleTimerGameStart();
+    void handleTimerGameTimerStart();
+    void handleTimerGameTimerStop();
+    void startTimerGameUpdate();
+    
+    void handleImageHeader(uint8_t* data, int length);
+    void handleImageDataChunk(uint8_t* data, int length);
     void drawCompleteImage();
+    
+public:
     static void resetReceive();
-};
-
-/**
- * 单像素填充特征值回调
- */
-class FillPixelCharacteristicCallbacks : public BLECharacteristicCallbacks {
-private:
-    MatrixPanel_I2S_DMA* dma_display;
-    
-public:
-    FillPixelCharacteristicCallbacks(MatrixPanel_I2S_DMA* display);
-    void onWrite(BLECharacteristic *pCharacteristic);
-};
-
-/**
- * 屏幕填充特征值回调
- */
-class FillScreenCharacteristicCallbacks : public BLECharacteristicCallbacks {
-private:
-    MatrixPanel_I2S_DMA* dma_display;
-    bool* isShowGIF;
-    void (*clear)();
-    
-public:
-    FillScreenCharacteristicCallbacks(MatrixPanel_I2S_DMA* display, void (*clearFunc)(), bool* gifFlag);
-    void onWrite(BLECharacteristic *pCharacteristic);
 };
 
 /**
@@ -120,18 +152,7 @@ private:
     
 public:
     BrightnessCharacteristicCallbacks(void (*brightnessFunc)(int));
-    void onWrite(BLECharacteristic *pCharacteristic);
-};
-
-/**
- * 刷新频率控制特征值回调
- */
-class RefreshRateCharacteristicCallbacks : public BLECharacteristicCallbacks {
-private:
-    void (*setRefreshRateFunc)(int);
-    
-public:
-    RefreshRateCharacteristicCallbacks(void (*refreshRateFunc)(int));
+    void onRead(BLECharacteristic *pCharacteristic) override;
     void onWrite(BLECharacteristic *pCharacteristic);
 };
 
@@ -156,7 +177,9 @@ private:
     static bool gifIsHeaderReceived;
     static unsigned long gifLastReceiveTime;
     //标记是否使用文件模式
-    static bool gifUseFileMode; 
+    static bool gifUseFileMode;
+    //延迟重置时间
+    static unsigned long gifResetDelayTime; 
     
 public:
     GIFCharacteristicCallbacks(MatrixPanel_I2S_DMA* display, bool* scrollFlag, bool* gifFlag,
@@ -165,6 +188,7 @@ public:
     
     // 静态方法
     static void checkGIFTimeout();
+    static void checkDelayedReset();
     static void cleanupOnStartup();
     static void cleanupAfterDisplay();
     //检查是否正在接收GIF数据
@@ -175,6 +199,7 @@ private:
     void handleGIFDataChunk(uint8_t* data, int length);
     void prepareGIFForDisplay();
     void loadAndDisplayGIF();
+    void handleImageDisplay();
     static void resetGIFReceive();
     static void resetGIFReceiveStateOnly();
 };
@@ -207,7 +232,9 @@ private:
     AnimatedGIF* gif;
     
     // 特征值指针
+    BLECharacteristic* pControlCharacteristic;
     BLECharacteristic* pBrightnessCharacteristic;
+    BLECharacteristic* pDeviceInfoCharacteristic;
     
     // 回调函数指针
     void (*setTextSizeFunc)(int);
@@ -217,30 +244,47 @@ private:
     void (*clearFunc)();
     void (*setLedBrightnessFunc)(int);
     void (*setRefreshRateFunc)(int);
+    void (*setClockModeFunc)(bool);
+    int (*getCurrentBrightnessFunc)();
     
-    // 状态标志
+public:
+    // 静态实例指针
+    static BLEHandler* instance;
+    
+    // 时钟管理器指针
+    ClockManager* clockManager;
+    
+    // 状态标志（公共访问）
     bool* isScrollText;
     bool* isShowGIF;
     
-    // 静态实例指针，用于在回调中访问
-    static BLEHandler* instance;
+    // 控制回调实例指针（公共访问）
+    ControlCharacteristicCallbacks* controlCallbacks;
     
-public:
     BLEHandler(MatrixPanel_I2S_DMA* display, AnimatedGIF* gifDecoder,
                void (*textSizeFunc)(int), void (*scrollSpeedFunc)(int),
                void (*displayFunc)(char*, bool), void (*freeTextFunc)(),
                void (*clearFunc)(), void (*brightnessFunc)(int),
-               void (*refreshRateFunc)(int), bool* scrollFlag, bool* gifFlag);
+               void (*refreshRateFunc)(int), void (*clockModeFunc)(bool),
+               int (*getBrightnessFunc)(), bool* scrollFlag, bool* gifFlag,
+               ClockManager* clockMgr = nullptr);
     
     void init();
     void startAdvertising();
     void stopAdvertising();
+    void disconnectBLE();
     
-    // 新增方法：发送当前亮度值
+    // 发送当前亮度值
     void sendCurrentBrightness(int brightness);
     
-    // 静态方法：发送当前亮度值（用于在回调中调用）
+    // 发送当前亮度值（用于在回调中调用）
     static void sendCurrentBrightnessStatic(int brightness);
+    
+    // 获取当前亮度值
+    int getCurrentBrightness();
+    
+    // 更新计时游戏显示
+    void updateTimerGameDisplay();
     
 private:
     void createCharacteristics();

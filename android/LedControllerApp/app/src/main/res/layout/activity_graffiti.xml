@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+
+    tools:context=".ui.GraffitiActivity">
+
+    <include layout="@layout/incl_title" />
+    <include
+        layout="@layout/incl_divider_block"
+        android:paddingLeft="@dimen/margin_medium"
+        android:paddingRight="@dimen/margin_medium" />
+    <androidx.appcompat.widget.SwitchCompat
+        android:id="@+id/sw"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="实时更新"
+        android:visibility="gone" />
+
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="@dimen/margin_medium"
+        android:background="@android:color/darker_gray"
+        android:layout_marginTop="@dimen/margin_large"
+
+        android:orientation="horizontal">
+
+        <ImageView
+            android:id="@+id/btn_drag"
+            style="@style/DrawToolImageStyle"
+            android:src="@drawable/drag_disable" />
+
+        <ImageView
+
+            android:id="@+id/btn_fill"
+            style="@style/DrawToolImageStyle"
+            android:src="@drawable/fill_disable" />
+
+        <ImageView
+
+            android:id="@+id/btn_all_black"
+            style="@style/DrawToolImageStyle"
+            android:src="@drawable/black" />
+
+        <ImageView
+
+            android:id="@+id/btn_all_white"
+            style="@style/DrawToolImageStyle"
+            android:src="@drawable/white" />
+    </LinearLayout>
+
+
+    <com.vincent.android.ledcontroller.widget.PixelView
+        android:id="@+id/pv"
+        android:layout_gravity="center_horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="@dimen/margin_small"
+        android:layout_weight="1" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding= "10dp"
+        android:background="@color/white"
+        android:layout_marginTop="@dimen/margin_medium"
+        android:orientation="horizontal">
+
+
+
+        <ImageView
+            android:id="@+id/btn_update"
+
+            android:src="@drawable/ic_send_enable"
+            android:layout_width="0dp"
+            android:layout_height="50dp"
+            android:layout_weight="1"
+            android:layout_marginStart="@dimen/margin_small"
+            android:text="发送文件" />
+
+    </LinearLayout>
+</LinearLayout>
