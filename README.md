@@ -9,23 +9,23 @@
 ## 🖼️ 项目展示
 
 ### 硬件展示
-![ESP32开发板](./art/esp32_board.png)
+<img src="./art/esp32_board.png" width="300" alt="ESP32开发板">
 *ESP32开发板与HUB75E LED矩阵模块*
 
-![LED显示效果](./art/led_display.jpg)
+<img src="./art/led_display.jpg" width="300" alt="LED显示效果">
 *64x64 LED矩阵显示效果*
 
 ### Android应用界面
-![应用主界面](./art/app_main.jpg)
+<img src="./art/app_main.jpg" width="300" alt="应用主界面">
 *主界面 - 支持文字显示、亮度调节、设备连接管理、时钟显示*
 
-![涂鸦功能](./art/app_graffiti.jpg)
+<img src="./art/app_graffiti.jpg" width="300" alt="涂鸦功能">
 *涂鸦功能 - 64x64像素画布，支持实时绘制和图片选择*
 
-![文字显示](./art/app_text.jpg)
+<img src="./art/app_text.jpg" width="300" alt="文字显示">
 *文字显示 - 支持静态文字和滚动文字，多种字体大小*
 
-![素材库](./art/app_gif_list.jpg)
+<img src="./art/app_gif_list.jpg" width="300" alt="素材库">
 *素材库 - 支持多种GIF动画播放和图片显示*
 
 ## ✨ 主要特性
