@@ -4,7 +4,7 @@
 
 ## 📱 项目演示
 
-🎬 **[观看完整演示视频](https://www.bilibili.com/video/BV13NtuezE3H/)**
+🎬 **[观看完整演示视频](https://www.bilibili.com/video/BV19r4iz5Eeo/?vd_source=a04a7343930f07c5b8e3583fdc3b1303)**
 
 ## 🖼️ 项目展示
 
@@ -297,7 +297,7 @@ A: 确认设备已连接，检查LED屏幕是否正常显示
 ## 📞 联系方式
 
 - **项目主页**: [GitHub Repository](https://github.com/VincentTung/LEDController)
-- **演示视频**: [Bilibili](https://www.bilibili.com/video/BV13NtuezE3H/)
+- **演示视频**: [Bilibili](https://www.bilibili.com/video/BV19r4iz5Eeo/?vd_source=a04a7343930f07c5b8e3583fdc3b1303)
 - **问题反馈**: [Issues](https://github.com/VincentTung/LEDController/issues)
 
 ---
