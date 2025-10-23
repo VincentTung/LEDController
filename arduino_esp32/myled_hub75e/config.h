@@ -6,7 +6,7 @@
 // ============================================================================
 
 // HUB75E LED矩阵配置
-#define PANEL_RES_X 128      // LED矩阵宽度
+#define PANEL_RES_X 64      // LED矩阵宽度
 #define PANEL_RES_Y 64      // LED矩阵高度
 #define PANEL_CHAIN 1       // 矩阵链长度
 
@@ -109,7 +109,7 @@
 // ============================================================================
 
 // 默认显示文本
-#define LED_DEFAULT_TEXT "1未连接未连接未连接未连接未连接未连接未连接未连接"
+#define LED_DEFAULT_TEXT "未连接未连接未连接未连接未连接未连接未连接未连接"
 
 // 亮度配置
 #define LED_DEFAULT_BRIGHTNAESS 60    // 默认亮度 (0-255)
