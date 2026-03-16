@@ -1,1 +1,5 @@
 android/MyLedApp/app/release/output-metadata.json
+/android/MyLedApp/.gradle
+/android/MyLedApp/.idea
+/android/MyLedApp/app/build
+android/MyLedApp/local.properties
